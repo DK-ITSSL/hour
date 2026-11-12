@@ -32,6 +32,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.hour.app.debug.DemoActions
 import com.hour.app.di.AppContainer
 import com.hour.app.recorder.JourneyRecorderService
 import com.hour.car.ProbeItem
@@ -55,14 +56,6 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
     LaunchedVoiceLog(container)
 
     MaterialTheme {
-        if (ux.requiresDistractionOptimization) {
-            DrivingMini(
-                running = running,
-                status = current?.let { "기록 중 · ${it.drivingMinutes}분 · ${"%.1f".format(it.distanceKm)}km" },
-                onMoment = { container.car.voice.listenOnce() },
-            )
-            return@MaterialTheme
-        }
         Column(Modifier.fillMaxSize().background(Color(0xFFF7F8FA)).padding(24.dp)) {
             Text("H:our · D1 진단 (${container.car.flavor})", fontSize = 32.sp, fontWeight = FontWeight.Bold)
             Text(
@@ -87,6 +80,7 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
                 OutlinedButton(onClick = { container.log.clear() }) { Text("로그 지우기", fontSize = 20.sp) }
             }
             DebugPanel(container)
+            if (com.hour.app.BuildConfig.DEBUG) DemoButtons(container)
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LazyColumn(Modifier.weight(1f)) {
@@ -132,18 +126,6 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
 }
 
 @Composable
-private fun DrivingMini(running: Boolean, status: String?, onMoment: () -> Unit) {
-    Box(Modifier.fillMaxSize().background(Color(0xFF131417)).padding(32.dp)) {
-        Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Text(status ?: if (running) "기록 대기" else "기록 꺼짐", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
-            Button(onClick = onMoment, modifier = Modifier.fillMaxWidth().height(100.dp)) {
-                Text("이 순간 기억", fontSize = 32.sp)
-            }
-        }
-    }
-}
-
-@Composable
 private fun LaunchedVoiceLog(container: AppContainer) {
     androidx.compose.runtime.LaunchedEffect(Unit) {
         container.car.voice.events.collect { container.log.add("voice: $it") }
@@ -155,4 +137,15 @@ private fun mark(s: ProbeStatus) = when (s) {
     ProbeStatus.UNSUPPORTED -> "–"
     ProbeStatus.FAILED -> "✘"
     ProbeStatus.INFO -> "ℹ"
+}
+
+/** 시연 준비 버튼(디버그 빌드 전용). adb로도 같은 동작을 부를 수 있다(MainActivity의 DEBUG_* 액션). */
+@Composable
+private fun DemoButtons(container: AppContainer) {
+    val scope = rememberCoroutineScope()
+    Row(Modifier.padding(top = 12.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        OutlinedButton(onClick = { scope.launch { DemoActions.seed(container) } }) { Text("시연용 샘플 넣기", fontSize = 18.sp) }
+        OutlinedButton(onClick = { scope.launch { DemoActions.previewArrival(container) } }) { Text("도착 흐름 미리보기", fontSize = 18.sp) }
+        OutlinedButton(onClick = { scope.launch { DemoActions.reset(container) } }) { Text("시연 초기화", fontSize = 18.sp) }
+    }
 }

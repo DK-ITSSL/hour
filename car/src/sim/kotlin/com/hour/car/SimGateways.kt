@@ -33,12 +33,15 @@ class FakeUxRestrictionSource : UxRestrictionSource {
 class FakeVoice : VoiceIO {
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 32)
     override val events: Flow<String> = _events
+    private val _transcripts = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    override val transcripts: Flow<String> = _transcripts
     override fun speak(text: String) {
         Log.i("HOUR.voice", "sim speak: $text")
         _events.tryEmit("TTS(sim): $text")
     }
     override fun listenOnce() {
-        _events.tryEmit("STT(sim): 음성 입력은 sim 빌드에서 동작하지 않습니다")
+        _events.tryEmit("STT(sim): 시연용 문장으로 대신합니다")
+        _transcripts.tryEmit("시연용 음성 메모")
     }
     override fun release() {}
 }

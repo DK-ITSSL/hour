@@ -96,11 +96,12 @@ class JourneyRecorderService : LifecycleService() {
             }
             is EngineOutput.GiftReady -> {
                 container.journeys.saveProgress(o.summary)
-                container.giftReady.value = o.summary
+                container.arrival.onGiftReady(o.summary)
                 container.log.add("journey: gift ready — ${o.summary.title} · ${km(o.summary.distanceKm)} · 추천 ${o.summary.suggestion?.category?.korean}(${o.summary.suggestion?.reason})")
             }
             is EngineOutput.Finished -> {
                 val unlocked = container.journeys.finish(o.summary)
+                container.arrival.onFinished(o.summary.id, unlocked)
                 container.currentJourney.value = null
                 container.journeys.clearCheckpoint()
                 container.log.add("journey: finished — ${o.summary.title} · ${km(o.summary.distanceKm)} · 해금 ${unlocked.map { it.name }}")

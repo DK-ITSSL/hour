@@ -40,7 +40,10 @@ data class UxState(
 )
 
 interface VoiceIO {
+    /** 진단 로그용 이벤트 문자열. */
     val events: Flow<String>
+    /** STT 최종 인식 결과(문장). */
+    val transcripts: Flow<String>
     fun speak(text: String)
     fun listenOnce()
     fun release()

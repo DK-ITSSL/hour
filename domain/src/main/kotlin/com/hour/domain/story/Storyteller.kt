@@ -43,7 +43,7 @@ object Storyteller {
         s.moments.firstOrNull()?.let { lines += "그리고 이 순간을 기억했어요. \"${it.text}\"" }
         val dest = s.destinationName ?: s.end.district
         val end = at(s.endedAt)
-        lines += "${s.drivingMinutes.coerceAtLeast(1)}분 동안 ${km(s.distanceKm)}를 달려 ${clock(end)}에" +
+        lines += "${duration(s.drivingMinutes.coerceAtLeast(1))} 동안 ${km(s.distanceKm)}를 달려 ${clock(end)}에" +
             (dest?.let { " ${it}에" } ?: "") + " 도착했어요."
         return lines.joinToString(" ")
     }
@@ -93,6 +93,9 @@ object Storyteller {
         val dow = listOf("월", "화", "수", "목", "금", "토", "일")[t.dayOfWeek.value - 1]
         return "${t.monthValue}월 ${t.dayOfMonth}일 ${dow}요일"
     }
+
+    private fun duration(min: Int): String =
+        if (min >= 60) "${min / 60}시간" + (if (min % 60 > 0) " ${min % 60}분" else "") else "${min}분"
 
     private fun km(v: Double): String = if (v < 10) "${(v * 10).roundToInt() / 10.0}km" else "${v.roundToInt()}km"
 }

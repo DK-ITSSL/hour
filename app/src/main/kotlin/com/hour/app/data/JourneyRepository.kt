@@ -17,7 +17,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-data class UnlockView(val rule: UnlockRule?, val ruleId: String, val unlockedAt: Long, val journeyId: String)
+data class UnlockView(val rule: UnlockRule?, val ruleId: String, val unlockedAt: Long, val journeyId: String, val seen: Boolean)
 
 /** 여정·해금·집/회사·체크포인트 저장소. 쓰기는 Mutex로 직렬화한다. */
 class JourneyRepository(private val dao: JourneyDao, private val log: (String) -> Unit) {
@@ -35,7 +35,7 @@ class JourneyRepository(private val dao: JourneyDao, private val log: (String) -
         dao.observeAll().map { list -> list.mapNotNull { decode(it.summaryJson) } }
 
     val unlocks: Flow<List<UnlockView>> = dao.observeUnlocks().map { list ->
-        list.map { u -> UnlockView(rules.firstOrNull { it.id == u.ruleId }, u.ruleId, u.unlockedAt, u.journeyId) }
+        list.map { u -> UnlockView(rules.firstOrNull { it.id == u.ruleId }, u.ruleId, u.unlockedAt, u.journeyId, u.seen) }
     }
 
     /** 진행 중·임시 마감 결과 저장(운행타입이 이미 확정됐으면 유지한다). */
@@ -46,8 +46,8 @@ class JourneyRepository(private val dao: JourneyDao, private val log: (String) -
     }
 
     /**
-     * 최종 마감. 사용자가 아직 운행타입을 고르지 않았으면 추천값을 AUTO_DEFAULT로 적용하고 해금을 평가한다.
-     * (도착 시점 확인 화면은 D3에서 붙인다.)
+     * 최종 마감. 도착 때 운행타입을 확인받지 못했으면(무응답·나중에) 추천값을 AUTO_DEFAULT로 적용하고 해금을 평가한다.
+     * 보통은 도착(P) 시 확인 화면·알림·Gleo로 먼저 확정되고, 그때 해금이 열린다(ArrivalFlow).
      */
     suspend fun finish(summary: JourneySummary): List<UnlockRule> {
         val prev = mutex.withLock { dao.get(summary.id)?.let { decode(it.summaryJson) } }
@@ -68,6 +68,23 @@ class JourneyRepository(private val dao: JourneyDao, private val log: (String) -
     }
 
     suspend fun latestJourneyId(): String? = dao.latest()?.id
+
+    suspend fun journey(id: String): JourneySummary? = dao.get(id)?.let { decode(it.summaryJson) }
+
+    suspend fun markUnlocksSeen() = dao.markUnlocksSeen()
+
+    /** 시연용 샘플 여정을 저장하고(운행타입이 있으면) 해금을 평가한다. 디버그 전용. */
+    suspend fun saveSample(s: JourneySummary): List<UnlockRule> {
+        mutex.withLock { dao.upsert(entityOf(s)) }
+        return if (s.category != null) evaluateUnlocks(s.id) else emptyList()
+    }
+
+    /** 시연 초기화: 여정·해금·체크포인트를 모두 지운다. 디버그 전용. */
+    suspend fun resetAll() = mutex.withLock {
+        dao.clearJourneys()
+        dao.clearUnlocks()
+        dao.clearCheckpoint()
+    }
 
     suspend fun discard(journeyId: String) = mutex.withLock { dao.delete(journeyId) }
 

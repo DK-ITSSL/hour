@@ -38,11 +38,12 @@ class GleoActionReceiver : BroadcastReceiver() {
                 val pending = goAsync()
                 app.container.scope.launch {
                     try {
-                        val id = app.container.journeys.latestJourneyId()
+                        // 도착 후 확인을 기다리는 여정이 있으면 그 여정, 없으면 가장 최근 여정
+                        val id = app.container.arrival.pending.value?.id ?: app.container.journeys.latestJourneyId()
                         if (id == null) {
                             GleoResponder.respond(context, action, "fail", "There is no recorded drive yet.")
                         } else {
-                            val unlocked = app.container.journeys.confirmCategory(id, category, CategorySource.GLEO)
+                            val unlocked = app.container.arrival.confirm(id, category, CategorySource.GLEO)
                             app.container.log.add("gleo: trip category -> ${category.korean}, 해금 ${unlocked.map { it.name }}")
                             GleoResponder.respond(context, action, "success", "I recorded this drive as a ${category.gleoName}.")
                         }

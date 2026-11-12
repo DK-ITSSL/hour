@@ -5,6 +5,8 @@ import ai.pleos.playground.stt.listener.ResultListener
 import ai.pleos.playground.tts.TextToSpeech
 import ai.pleos.playground.tts.listener.EventListener
 import android.content.Context
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import java.util.Locale
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +22,8 @@ import ai.pleos.playground.tts.listener.OnInitializeListener as TtsInit
 class PleosVoice(private val context: Context) : VoiceIO {
     private val _events = MutableSharedFlow<String>(extraBufferCapacity = 64)
     override val events: Flow<String> = _events
+    private val _transcripts = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    override val transcripts: Flow<String> = _transcripts
 
     private var tts: TextToSpeech? = null
     private var stt: SpeechToText? = null
@@ -60,7 +64,10 @@ class PleosVoice(private val context: Context) : VoiceIO {
     private fun ensureStt(): SpeechToText = stt ?: SpeechToText(context, SttMode.ON_DEVICE).also { engine ->
         stt = engine
         engine.addListener(object : ResultListener {
-            override fun onUpdated(stt: String, completed: Boolean) = log(if (completed) "stt final: $stt" else "stt partial: $stt")
+            override fun onUpdated(stt: String, completed: Boolean) {
+                log(if (completed) "stt final: $stt" else "stt partial: $stt")
+                if (completed && stt.isNotBlank()) _transcripts.tryEmit(stt.trim())
+            }
             override fun onUpdatedEpdData(on: Long, off: Long) {}
             override fun onStartedRecognition() = log("stt started")
             override fun onEndedRecognition() = log("stt ended")
@@ -79,14 +86,21 @@ class PleosVoice(private val context: Context) : VoiceIO {
         })
     }
 
-    override fun speak(text: String) {
+    // SDK 초기화·호출은 메인 스레드에서 한다(기록 서비스·알림 수신부는 백그라운드 스레드에서 부른다).
+    private val main = Handler(Looper.getMainLooper())
+
+    private fun onMain(block: () -> Unit) {
+        if (Looper.myLooper() == Looper.getMainLooper()) block() else main.post(block)
+    }
+
+    override fun speak(text: String) = onMain {
         runCatching {
             val engine = ensureTts()
             if (ttsReady) engine.speak(text, true) else pendingSpeech = text
         }.onFailure { log("tts unavailable: $it") }
     }
 
-    override fun listenOnce() {
+    override fun listenOnce() = onMain {
         runCatching {
             val engine = ensureStt()
             if (sttReady) engine.request() else pendingListen = true

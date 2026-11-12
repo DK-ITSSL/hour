@@ -62,6 +62,9 @@ interface JourneyDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertUnlocks(e: List<UnlockEntity>): List<Long>
     @Query("SELECT * FROM unlock ORDER BY unlockedAt DESC") fun observeUnlocks(): Flow<List<UnlockEntity>>
     @Query("SELECT ruleId FROM unlock") suspend fun unlockedIds(): List<String>
+    @Query("UPDATE unlock SET seen = 1 WHERE seen = 0") suspend fun markUnlocksSeen()
+    @Query("DELETE FROM unlock") suspend fun clearUnlocks()
+    @Query("DELETE FROM journey") suspend fun clearJourneys()
 
     @Upsert suspend fun upsertAnchor(e: AnchorEntity)
     @Query("SELECT * FROM anchor") suspend fun anchors(): List<AnchorEntity>

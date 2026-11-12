@@ -15,6 +15,7 @@ class HourApp : Application() {
         getSystemService(NotificationManager::class.java).createNotificationChannel(
             NotificationChannel(CHANNEL_RECORDING, getString(R.string.notif_channel_recording), NotificationManager.IMPORTANCE_LOW),
         )
+        container.notifier.createChannel()
     }
 
     companion object {

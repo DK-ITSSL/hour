@@ -56,6 +56,11 @@
             </intent-filter>
         </receiver>
 
+        <!-- 도착 알림의 운행타입 버튼(앱 내부 전용) -->
+        <receiver
+            android:name=".arrival.CategoryActionReceiver"
+            android:exported="false" />
+
         <!-- Gleo: component=service 함수는 브로드캐스트로 들어온다 -->
         <receiver
             android:name=".gleo.GleoActionReceiver"

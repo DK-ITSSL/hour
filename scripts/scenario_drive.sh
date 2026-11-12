@@ -2,7 +2,7 @@
 # 에뮬레이터 주행 시나리오(약 2분): 출발 → 소나기 → 창문 → 순간 기록(Gleo) → 상향등 → 주차.
 # 전제: 앱 설치, 기록 서비스 실행 중, adb forward tcp:8088 tcp:8088
 set -uo pipefail
-ADB=${ADB:-adb}
+ADB=${ADB:-$(command -v adb || echo "${ANDROID_HOME:-$HOME/Library/Android/sdk}/platform-tools/adb")}
 VC=${VC:-http://127.0.0.1:8088}
 PKG=com.hour.app
 ( while true; do curl -s -o /dev/null -X POST "$VC/browser/session?client=hour-cli"; sleep 1; done ) & HB=$!

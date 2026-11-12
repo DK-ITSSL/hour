@@ -12,9 +12,18 @@
 |---|---|---|
 | D1 | 프로젝트 골격, 차량 신호 어댑터, 에뮬레이터 실측 검증 | 완료 |
 | D2 | 여정 상태 머신, 감각 계산, 운행타입 분류, 해금 엔진, 저장소 | 완료 |
-| D3 | 화면(홈·여정 상세·도착 선물·옷장·주행 중 미니), 음성, Gleo 연동 | 예정 |
+| D3 | 화면(홈·여정 상세·운행타입 확인·도착 선물·옷장·주행 중 미니), 도착 흐름(음성·알림·Gleo), 음성 순간 기록 | 완료 |
+| D4 | 경로 안내 이벤트 확인, release 서명 APK, 시연 영상, 제출 | 예정 |
 
-지금 빌드의 화면은 진단 화면입니다. 기록 서비스가 여정을 자동으로 기록·저장하고, 진단 화면에서 현재 여정·최근 여정·해금 결과를 확인할 수 있습니다. 실제 화면은 D3에서 붙입니다.
+시동을 걸면 기록 서비스가 여정을 자동으로 기록합니다. 도착해서 P단에 두면 "이번 운행은 어떤 길이었나요?"를 음성·알림·화면으로 묻고(Gleo로 답해도 됩니다), 운행타입이 정해지면 그 타입의 선물(캐릭터 애셋)이 열립니다.
+
+- **홈**: 캐릭터 아워(가칭)와 방, 운행타입 탭(전체·출퇴근길·여행·데이트·일상), 여정 카드
+- **여정 상세**: 제목·내러티브(낭독), 감각 막대, 경로 스케치, 다녀온 곳, 기억한 순간, 안심 운행
+- **운행타입 확인 → 도착 선물**: 추천 타입이 먼저 선택되고 10초 동안 응답이 없으면 추천대로 기록, 이어서 카드가 뒤집히며 새 애셋이 나타남
+- **옷장**: 슬롯별 애셋 장착, 잠긴 애셋은 실루엣과 힌트
+- **주행 중 미니**(주행 규제 중): 기록 상태, 감각 표시등, "이 순간 기억"(음성) 버튼 하나
+
+캐릭터와 애셋 그림은 임시 그림입니다. 실제 그림 파일을 넣는 방법은 [docs/ART-ASSETS.md](docs/ART-ASSETS.md)에 있습니다.
 
 ```bash
 ./gradlew :domain:test          # 도메인 단위·시나리오 테스트(22개)
@@ -24,10 +33,10 @@ scripts/scenario_drive.sh       # 에뮬레이터 주행 시나리오(앱의 기
 ## 구조
 
 ```
-app/     화면, 여정 기록 서비스, Gleo 수신부 (수동 의존성 주입)
+app/     화면(홈·여정 상세·도착 선물·옷장·주행 중 미니), 여정 기록 서비스, 도착 흐름, Gleo 수신부 (수동 의존성 주입)
 car/     차량·음성 신호 게이트웨이. pleos(실제 SDK) / sim(가짜 신호) 두 가지 구현
 domain/  순수 Kotlin 도메인(신호 모델, 여정 상태 머신, 감각 누적, 운행타입 분류, 제목·내러티브, 해금 엔진)
-docs/    설계 문서(MVP-BLUEPRINT.md)
+docs/    설계 문서(MVP-BLUEPRINT.md), 그림 교체 가이드(ART-ASSETS.md)
 scripts/ 에뮬레이터 Virtual Console 제어(vc.sh), 주행 시나리오(scenario_drive.sh)
 ```
 
@@ -51,7 +60,18 @@ adb install --user 10 -r app/build/outputs/apk/pleos/debug/app-pleos-debug.apk
 adb shell am start --user 10 -n com.hour.app/.MainActivity
 ```
 
-앱의 "권한 요청" 버튼으로 위치·마이크·알림·차속 권한을 허용한 뒤 "기록 서비스 시작"을 누르면 차량 신호가 실시간 로그에 표시됩니다.
+앱을 열면 기록 서비스가 켜집니다. 홈의 "권한 허용" 버튼으로 위치·차속·마이크·알림 권한을 허용하세요. 디버그 빌드에는 차량 신호 로그를 보는 "진단" 탭이 있습니다.
+
+### 시연 준비 (디버그 빌드)
+
+```bash
+# 지난 며칠의 출퇴근·일상·데이트 샘플 여정 5건(영상에는 "시연용 샘플 데이터"로 표기)
+adb shell am start --user 10 -n com.hour.app/.MainActivity -a com.hour.app.debug.SEED
+# 강릉 여행 도착 직전 상태 → 운행타입 확인 → 도착 선물
+adb shell am start --user 10 -n com.hour.app/.MainActivity -a com.hour.app.debug.PREVIEW_ARRIVAL
+# 여정·선물·장착 초기화
+adb shell am start --user 10 -n com.hour.app/.MainActivity -a com.hour.app.debug.RESET
+```
 
 ### 차량 신호 넣기 (Virtual Console)
 
@@ -70,6 +90,8 @@ scripts/vc.sh window rl 60
 
 ```bash
 adb shell "am broadcast --user 10 -a SAVE_JOURNEY_MOMENT -p com.hour.app --es ACTION_PARAM '{\"note\":\"애들이 무지개 봤어\"}'"
+# 도착 후 운행타입 확정(trip · commute · date · daily)
+adb shell "am broadcast --user 10 -a SET_TRIP_CATEGORY -p com.hour.app --es ACTION_PARAM '{\"category\":\"trip\"}'"
 ```
 
 ## APK
