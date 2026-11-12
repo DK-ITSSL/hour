@@ -1,0 +1,46 @@
+{
+  "packageName": "com.donghaengrok.app",
+  "appDescription": "Archives the user's drives as journeys from vehicle signals and lets the user save moments and set the type of each drive.",
+  "version": "0.1.0",
+  "actionCalls": [
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "SAVE_JOURNEY_MOMENT",
+        "description": "Save a short note about the current moment to the user's ongoing or most recent drive.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "note": { "type": "string", "description": "The note the user wants to remember about this moment." }
+          },
+          "required": ["note"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "service",
+        "name": "SET_TRIP_CATEGORY",
+        "description": "Set the type of the current or most recent drive.",
+        "parameters": {
+          "type": "object",
+          "properties": {
+            "category": { "type": "string", "enum": ["commute", "trip", "date", "daily"], "description": "The type of the drive." }
+          },
+          "required": ["category"]
+        }
+      }
+    },
+    {
+      "type": "function",
+      "function": {
+        "component": "activity",
+        "name": "SHOW_TODAY_JOURNEY",
+        "description": "Open the summary of today's journey in the app.",
+        "parameters": { "type": "object", "properties": {}, "required": [] }
+      }
+    }
+  ]
+}

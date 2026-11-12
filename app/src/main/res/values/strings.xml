@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">동행록</string>
+    <string name="notif_channel_recording">여정 기록</string>
+    <string name="notif_recording_idle">여정을 기다리는 중</string>
+</resources>
