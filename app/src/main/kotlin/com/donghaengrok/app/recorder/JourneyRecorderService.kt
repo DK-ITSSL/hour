@@ -1,5 +1,6 @@
 package com.donghaengrok.app.recorder
 
+import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
@@ -11,60 +12,169 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.donghaengrok.app.DonghaengApp
 import com.donghaengrok.app.R
+import com.donghaengrok.domain.engine.EngineOutput
+import com.donghaengrok.domain.engine.JourneyEngine
+import com.donghaengrok.domain.journey.Anchor
+import com.donghaengrok.domain.journey.GeoPoint
 import com.donghaengrok.domain.signal.SignalEvent
-import kotlinx.coroutines.Job
+import kotlin.math.roundToInt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /**
  * 여정 기록 포그라운드 서비스(specialUse).
- * D1: 모든 신호를 구독해 진단 로그로 남긴다. D2부터 도메인 엔진(상태 머신·감각 누적)으로 흘려보낸다.
+ * 차량 신호 → JourneyEngine(단일 스레드) → 저장소. 30초마다 시간 경과(P단 타이머)와 체크포인트를 처리한다.
  */
 class JourneyRecorderService : LifecycleService() {
     private val container get() = (application as DonghaengApp).container
-    private var collectJob: Job? = null
+    private val engine = JourneyEngine()
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private val loop = Dispatchers.Default.limitedParallelism(1)
+    private var lastCheckpointAt = 0L
+    private var lastPublishAt = 0L
 
     override fun onCreate() {
         super.onCreate()
-        val notification = NotificationCompat.Builder(this, DonghaengApp.CHANNEL_RECORDING)
-            .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(getString(R.string.app_name))
-            .setContentText(getString(R.string.notif_recording_idle))
-            .setOngoing(true)
-            .build()
         val type = if (Build.VERSION.SDK_INT >= 34) ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE else 0
-        runCatching { ServiceCompat.startForeground(this, NOTIFICATION_ID, notification, type) }
+        runCatching { ServiceCompat.startForeground(this, NOTIFICATION_ID, notification(getString(R.string.notif_recording_idle)), type) }
             .onSuccess { container.log.add("service: startForeground(specialUse) ok") }
             .onFailure { container.log.add("service: startForeground FAILED $it") }
 
         container.recorderRunning.value = true
         container.car.ux.start()
-        collectJob = lifecycleScope.launch {
-            container.log.add("service: subscribing signals (${container.car.flavor})")
-            container.car.signals.signals().collect { event -> container.log.add(describe(event)) }
+
+        lifecycleScope.launch(loop) {
+            restore()
+            launch {
+                container.log.add("service: subscribing signals (${container.car.flavor})")
+                container.car.signals.signals().collect { e ->
+                    if (e is SignalEvent.NaviAnchor) container.journeys.saveAnchor(Anchor(e.type, e.name, GeoPoint(e.lat, e.lon)), "NAVI_BOOKMARK")
+                    if (e is SignalEvent.Moment) container.log.add("moment: ${e.text} (${e.source})")
+                    handle(engine.onEvent(e))
+                    publish(e.at, force = false)
+                }
+            }
+            while (isActive) {
+                delay(TICK_MS)
+                val now = System.currentTimeMillis()
+                handle(engine.onTick(now))
+                publish(now, force = true)
+                checkpoint(now, force = false)
+            }
         }
     }
 
+    private suspend fun restore() {
+        container.journeys.anchors().forEach(engine::setAnchor)
+        val cp = container.journeys.loadCheckpoint() ?: return
+        val out = engine.restore(cp, System.currentTimeMillis())
+        container.log.add("service: restored checkpoint (state=${engine.state}, journey=${engine.activeJourneyId})")
+        handle(out)
+    }
+
+    private suspend fun handle(outputs: List<EngineOutput>) {
+        for (o in outputs) when (o) {
+            is EngineOutput.Started -> {
+                container.log.add("journey: started ${o.id.take(8)}")
+                engine.current()?.let { container.journeys.saveProgress(it) }
+                checkpoint(o.at, force = true)
+            }
+            is EngineOutput.Discarded -> {
+                container.log.add("journey: discarded ${o.id.take(8)} (300m 미만)")
+                container.journeys.discard(o.id)
+                container.currentJourney.value = null
+                container.journeys.clearCheckpoint()
+            }
+            is EngineOutput.Progress -> {
+                container.journeys.saveProgress(o.summary)
+                container.currentJourney.value = o.summary
+                checkpoint(System.currentTimeMillis(), force = true)
+            }
+            is EngineOutput.GiftReady -> {
+                container.journeys.saveProgress(o.summary)
+                container.giftReady.value = o.summary
+                container.log.add("journey: gift ready — ${o.summary.title} · ${km(o.summary.distanceKm)} · 추천 ${o.summary.suggestion?.category?.korean}(${o.summary.suggestion?.reason})")
+            }
+            is EngineOutput.Finished -> {
+                val unlocked = container.journeys.finish(o.summary)
+                container.currentJourney.value = null
+                container.journeys.clearCheckpoint()
+                container.log.add("journey: finished — ${o.summary.title} · ${km(o.summary.distanceKm)} · 해금 ${unlocked.map { it.name }}")
+            }
+            is EngineOutput.OrphanMoment -> {
+                val id = container.journeys.attachMoment(o.moment)
+                container.log.add("moment: attached to ${id?.take(8) ?: "(여정 없음)"}")
+            }
+        }
+    }
+
+    private fun publish(now: Long, force: Boolean) {
+        if (!force && now - lastPublishAt < PUBLISH_MS) return
+        lastPublishAt = now
+        val cur = engine.current(now)
+        container.currentJourney.value = cur
+        val text = cur?.let { "기록 중 · ${it.drivingMinutes}분 · ${km(it.distanceKm)}" } ?: getString(R.string.notif_recording_idle)
+        getSystemService(NotificationManager::class.java).notify(NOTIFICATION_ID, notification(text))
+    }
+
+    private suspend fun checkpoint(now: Long, force: Boolean) {
+        if (engine.activeJourneyId == null) return
+        if (!force && now - lastCheckpointAt < CHECKPOINT_MS) return
+        lastCheckpointAt = now
+        container.journeys.saveCheckpoint(engine.checkpoint(now))
+    }
+
+    private fun notification(text: String) = NotificationCompat.Builder(this, DonghaengApp.CHANNEL_RECORDING)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setContentTitle(getString(R.string.app_name))
+        .setContentText(text)
+        .setOngoing(true)
+        .setOnlyAlertOnce(true)
+        .build()
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (intent?.action == ACTION_FINALIZE_NOW && com.donghaengrok.app.BuildConfig.DEBUG) {
+            lifecycleScope.launch(loop) {
+                container.log.add("debug: finalize now")
+                handle(engine.finalizeNow(System.currentTimeMillis()))
+            }
+        }
         return START_STICKY
     }
 
     override fun onDestroy() {
-        collectJob?.cancel()
+        val now = System.currentTimeMillis()
+        if (engine.activeJourneyId != null) {
+            // 서비스가 내려가기 전에 마지막 상태를 남긴다(복구용).
+            kotlinx.coroutines.runBlocking { container.journeys.saveCheckpoint(engine.checkpoint(now)) }
+        }
         container.car.ux.stop()
         container.recorderRunning.value = false
         container.log.add("service: destroyed")
         super.onDestroy()
     }
 
-    private fun describe(e: SignalEvent): String =
-        e.toString().replace(Regex("""at=\d+, ?"""), "").replace("SignalEvent.", "")
+    private fun km(v: Double) = if (v < 10) "${(v * 10).roundToInt() / 10.0}km" else "${v.roundToInt()}km"
 
     companion object {
         private const val NOTIFICATION_ID = 1001
+        private const val TICK_MS = 30_000L
+        private const val PUBLISH_MS = 2_000L
+        private const val CHECKPOINT_MS = 30_000L
 
         fun start(context: Context) {
             ContextCompat.startForegroundService(context, Intent(context, JourneyRecorderService::class.java))
+        }
+
+        const val ACTION_FINALIZE_NOW = "com.donghaengrok.app.action.FINALIZE_NOW"
+
+        fun finalizeNow(context: Context) {
+            context.startService(Intent(context, JourneyRecorderService::class.java).setAction(ACTION_FINALIZE_NOW))
         }
 
         fun stop(context: Context) {

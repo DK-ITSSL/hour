@@ -48,12 +48,19 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
     val running by container.recorderRunning.collectAsState()
     val lines by container.log.lines.collectAsState()
     var probe by remember { mutableStateOf<List<ProbeItem>>(emptyList()) }
+    val current by container.currentJourney.collectAsState()
+    val journeys by container.journeys.journeys.collectAsState(initial = emptyList())
+    val unlocks by container.journeys.unlocks.collectAsState(initial = emptyList())
 
     LaunchedVoiceLog(container)
 
     MaterialTheme {
         if (ux.requiresDistractionOptimization) {
-            DrivingMini(running = running, onMoment = { container.car.voice.listenOnce() })
+            DrivingMini(
+                running = running,
+                status = current?.let { "기록 중 · ${it.drivingMinutes}분 · ${"%.1f".format(it.distanceKm)}km" },
+                onMoment = { container.car.voice.listenOnce() },
+            )
             return@MaterialTheme
         }
         Column(Modifier.fillMaxSize().background(Color(0xFFF7F8FA)).padding(24.dp)) {
@@ -83,7 +90,25 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
             Spacer(Modifier.height(12.dp))
             Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 LazyColumn(Modifier.weight(1f)) {
-                    item { Text("진단 결과", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    item { Text("현재 여정", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    item {
+                        Text(
+                            current?.let { c ->
+                                "${c.title}\n${"%.1f".format(c.distanceKm)}km · ${c.drivingMinutes}분 · 비 ${c.rain.minutes}분 · 바람 ${"%.1f".format(c.wind.km)}km · 별빛 ${c.light.highBeamMinutes}분 · 동행 ${c.companions.count}명 · 순간 ${c.moments.size}\n추천: ${c.suggestion?.category?.korean} (${c.suggestion?.reason})"
+                            } ?: "없음",
+                            fontSize = 16.sp,
+                        )
+                    }
+                    item { Spacer(Modifier.height(8.dp)); Text("최근 여정", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    items(journeys.take(5)) { j ->
+                        Text(
+                            "${if (j.final) "■" else "□"} ${j.title} · ${"%.1f".format(j.distanceKm)}km · ${j.category?.korean ?: "미확정"}${j.categorySource?.let { "($it)" } ?: ""}",
+                            fontSize = 15.sp,
+                        )
+                    }
+                    item { Spacer(Modifier.height(8.dp)); Text("해금", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
+                    items(unlocks) { u -> Text("★ ${u.rule?.name ?: u.ruleId}", fontSize = 15.sp) }
+                    item { Spacer(Modifier.height(8.dp)); Text("진단 결과", fontSize = 22.sp, fontWeight = FontWeight.Bold) }
                     items(probe) { p ->
                         Text(
                             "${mark(p.status)} ${p.name}  ${p.detail}",
@@ -107,10 +132,10 @@ fun ProbeScreen(container: AppContainer, onRequestPermissions: () -> Unit) {
 }
 
 @Composable
-private fun DrivingMini(running: Boolean, onMoment: () -> Unit) {
+private fun DrivingMini(running: Boolean, status: String?, onMoment: () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color(0xFF131417)).padding(32.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
-            Text(if (running) "기록 중" else "기록 대기", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
+            Text(status ?: if (running) "기록 대기" else "기록 꺼짐", color = Color.White, fontSize = 40.sp, fontWeight = FontWeight.Bold)
             Button(onClick = onMoment, modifier = Modifier.fillMaxWidth().height(100.dp)) {
                 Text("이 순간 기억", fontSize = 32.sp)
             }

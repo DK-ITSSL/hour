@@ -483,7 +483,8 @@ class PleosCarSignalSource(private val context: Context) : CarSignalSource {
                 is SignalEvent.SeatOccupancy -> "Occ.${e.seat}"
                 is SignalEvent.SeatBelt -> "Belt.${e.seat}"
                 is SignalEvent.SeatHeat -> "Heat.${e.seat}"
-                is SignalEvent.Moment, is SignalEvent.Unavailable, is SignalEvent.NaviPassPoint, is SignalEvent.NaviCaution -> return@filter true
+                is SignalEvent.Moment, is SignalEvent.Unavailable, is SignalEvent.NaviPassPoint, is SignalEvent.NaviCaution,
+                is SignalEvent.Speed, is SignalEvent.NaviSpeedLimit -> return@filter true
                 else -> e::class.simpleName ?: "?"
             }
             val prev = last[key]
@@ -510,7 +511,6 @@ class PleosCarSignalSource(private val context: Context) : CarSignalSource {
         is SignalEvent.NaviStatus -> e.copy(at = 0)
         is SignalEvent.NaviAnchor -> e.copy(at = 0)
         is SignalEvent.Location -> e.copy(at = 0)
-        is SignalEvent.Speed -> e.copy(at = 0)
         else -> e
     }
 

@@ -6,6 +6,9 @@ import android.content.Intent
 import com.donghaengrok.app.DonghaengApp
 import com.donghaengrok.domain.signal.MomentSource
 import com.donghaengrok.domain.signal.SignalEvent
+import com.donghaengrok.domain.journey.CategorySource
+import com.donghaengrok.domain.journey.TripCategory
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 
 /** Gleo Interface component=service 함수 수신부. 7초 안에 APP_ACTION_RESPONSE로 답한다. */
@@ -26,12 +29,26 @@ class GleoActionReceiver : BroadcastReceiver() {
                 }
             }
             ACTION_SET_CATEGORY -> {
-                val category = params["category"]?.lowercase()
-                if (category in CATEGORIES) {
-                    app.container.log.add("gleo: trip category -> $category")
-                    GleoResponder.respond(context, action, "success", "I recorded this drive as a $category.")
-                } else {
+                val category = TripCategory.fromGleo(params["category"])
+                if (category == null) {
                     GleoResponder.respond(context, action, "asking", "Was this drive a commute, a trip, a date, or a daily drive?")
+                    return
+                }
+                // DB 작업이 끝난 뒤 응답한다(Gleo 제한 7초 안).
+                val pending = goAsync()
+                app.container.scope.launch {
+                    try {
+                        val id = app.container.journeys.latestJourneyId()
+                        if (id == null) {
+                            GleoResponder.respond(context, action, "fail", "There is no recorded drive yet.")
+                        } else {
+                            val unlocked = app.container.journeys.confirmCategory(id, category, CategorySource.GLEO)
+                            app.container.log.add("gleo: trip category -> ${category.korean}, 해금 ${unlocked.map { it.name }}")
+                            GleoResponder.respond(context, action, "success", "I recorded this drive as a ${category.gleoName}.")
+                        }
+                    } finally {
+                        pending.finish()
+                    }
                 }
             }
         }
@@ -42,7 +59,6 @@ class GleoActionReceiver : BroadcastReceiver() {
         const val ACTION_SET_CATEGORY = "SET_TRIP_CATEGORY"
         const val ACTION_SHOW_TODAY = "SHOW_TODAY_JOURNEY"
         private const val MAX_NOTE = 200
-        private val CATEGORIES = setOf("commute", "trip", "date", "daily")
     }
 }
 
