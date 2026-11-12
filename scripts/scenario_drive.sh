@@ -4,8 +4,8 @@
 set -uo pipefail
 ADB=${ADB:-adb}
 VC=${VC:-http://127.0.0.1:8088}
-PKG=com.donghaengrok.app
-( while true; do curl -s -o /dev/null -X POST "$VC/browser/session?client=dhr-cli"; sleep 1; done ) & HB=$!
+PKG=com.hour.app
+( while true; do curl -s -o /dev/null -X POST "$VC/browser/session?client=hour-cli"; sleep 1; done ) & HB=$!
 trap 'kill $HB 2>/dev/null' EXIT
 put() { curl -s -o /dev/null -X PUT "$VC$1"; echo "  $(date +%T) $1"; }
 fix() { $ADB emu geo fix "$2" "$1" >/dev/null; }   # fix <lat> <lon>

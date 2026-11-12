@@ -1,4 +1,4 @@
-# 동행록 MVP 소프트웨어 블루프린트 (v0.1, 2026-11-12)
+# H:our MVP 소프트웨어 블루프린트 (v0.1, 2026-11-12)
 
 구현 전 설계 문서다. API 이름, 권한, 열거값은 로컬 공식 문서 사본(`pleos-docs/`)에서 확인했다. "확인 필요"로 표시한 것은 Day 1에 에뮬레이터에서 검증한다.
 
@@ -93,7 +93,7 @@ Domain (:domain, 순수 Kotlin/JVM):
 ### 3.1 모듈 3개
 
 ```
-donghaengrok/
+hour/
 ├─ settings.gradle.kts, gradle/libs.versions.toml
 ├─ domain/   (Kotlin JVM 라이브러리, Android·SDK 의존 없음)
 │  ├─ signal/   SignalEvent.kt (Gear, Speed, Wiper, Light, Window, Seat, Belt, Hvac, Odometer,
@@ -121,18 +121,18 @@ donghaengrok/
 ```
 
 - 의존 방향은 `:app → :car → :domain`, `:app → :domain`이다. `:domain`은 아무것도 모른다.
-- 패키지 ID 가안: `com.donghaengrok.app`. Gleo 스키마와 App Market 등록에 쓰이므로 확정하면 바꾸지 않는다.
+- 패키지 ID: `com.hour.app`. 2026-11-12에 앱 이름을 "동행록" → "차곡" → "H:our"로 바꾸며 함께 바꿨다. 콜론은 패키지·파일·저장소 이름에 쓸 수 없어 그곳에서는 `hour`/`Hour`로 쓴다. Gleo 스키마와 App Market 등록에 쓰이므로 이제 고정한다.
 
 ### 3.2 빌드 변형 (flavor dimension `env`)
 
 | flavor | 용도 | 신호 출처 | 설치 대상 | applicationId |
 |---|---|---|---|---|
-| `pleos` | 실제 동작, **제출용** (`pleosRelease`) | Pleos SDK + AAOS | Pleos Connect 에뮬레이터 v2.1.0, 실차 | `com.donghaengrok.app` |
-| `sim` | UI 개발, 시연 재생, 도메인 통합 확인 | 가짜 신호(디버그 패널, JSON 시나리오 재생) | 일반 안드로이드 에뮬레이터·태블릿 | `com.donghaengrok.app.sim` |
+| `pleos` | 실제 동작, **제출용** (`pleosRelease`) | Pleos SDK + AAOS | Pleos Connect 에뮬레이터 v2.1.0, 실차 | `com.hour.app` |
+| `sim` | UI 개발, 시연 재생, 도메인 통합 확인 | 가짜 신호(디버그 패널, JSON 시나리오 재생) | 일반 안드로이드 에뮬레이터·태블릿 | `com.hour.app.sim` |
 
 - `:car`와 `:app`에 같은 flavor 이름을 선언해 Gradle이 자동으로 짝을 맞춘다. Pleos SDK 의존성은 `pleosImplementation`으로만 넣는다. 그래서 `sim` 빌드에는 SDK와 AAOS 호출 코드가 들어가지 않는다.
 - `sim`에서도 주행 규제는 가짜 `UxRestrictionSource`로 흉내 내서 주행 중 미니 화면을 검증한다.
-- 제출 APK는 `pleosRelease`를 자체 키스토어로 서명하고, 파일명은 `팀명_동행록_release.apk`로 한다.
+- 제출 APK는 `pleosRelease`를 자체 키스토어로 서명하고, 파일명은 `팀명_Hour_release.apk`로 한다.
 - 시연용 시드 데이터와 디버그 패널은 `sim` 빌드와 `pleosDebug`에만 넣는다. `pleosRelease`에는 포함하지 않는다.
 
 ---
@@ -381,7 +381,7 @@ donghaengrok/
 - **응답**: 7초 안에 `ai.pleos.playground.intent.action.APP_ACTION_RESPONSE`를 브로드캐스트한다. extras는 `packageName`과 `response` JSON(`functionName`, `status`, `message`, `mode`, `data`)이다.
 - **에뮬레이터 시연**:
   ```bash
-  adb shell "am broadcast --user 10 -a SAVE_JOURNEY_MOMENT -p com.donghaengrok.app --es ACTION_PARAM '{\"actionParameters\":{\"note\":\"애들이 무지개 봤어\"}}'"
+  adb shell "am broadcast --user 10 -a SAVE_JOURNEY_MOMENT -p com.hour.app --es ACTION_PARAM '{\"actionParameters\":{\"note\":\"애들이 무지개 봤어\"}}'"
   ```
 - **보안**: 아무 앱이나 브로드캐스트를 보낼 수 있다. 입력 길이·형식을 검증하고, 메모 저장 외의 부수 효과는 두지 않는다.
 
@@ -467,7 +467,7 @@ checkpoint(journeyId PK, at, draftJson)
 - **사용자 권리**: 여정 삭제와 전체 삭제를 제공한다. 동의 화면에 처리 방침을 쓴다.
 - **release 빌드**: `debuggable=false`, 자체 키스토어로 서명(키는 저장소에 넣지 않음), 버전은 제출할 때마다 올린다.
 - **블라인드 심사**: 저장소, 커밋 작성자, README, 영상 어디에도 실명·계정이 드러나지 않게 한다.
-- **APK 파일명**: `팀명_동행록_release.apk`, 위치는 `apk/`.
+- **APK 파일명**: `팀명_Hour_release.apk`, 위치는 `apk/`.
 
 ---
 

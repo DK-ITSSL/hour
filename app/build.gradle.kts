@@ -7,11 +7,11 @@ plugins {
 }
 
 android {
-    namespace = "com.donghaengrok.app"
+    namespace = "com.hour.app"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.donghaengrok.app"
+        applicationId = "com.hour.app"
         minSdk = 28
         targetSdk = 35
         versionCode = 1

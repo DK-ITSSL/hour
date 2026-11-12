@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace = "com.donghaengrok.car"
+    namespace = "com.hour.car"
     compileSdk = 35
     defaultConfig { minSdk = 28 }
 

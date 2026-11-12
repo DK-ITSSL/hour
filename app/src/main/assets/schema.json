@@ -1,5 +1,5 @@
 {
-  "packageName": "com.donghaengrok.app",
+  "packageName": "com.hour.app",
   "appDescription": "Archives the user's drives as journeys from vehicle signals and lets the user save moments and set the type of each drive.",
   "version": "0.1.0",
   "actionCalls": [

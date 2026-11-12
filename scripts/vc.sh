@@ -5,7 +5,7 @@
 # 전제: adb forward tcp:8088 tcp:8088
 set -euo pipefail
 VC=${VC:-http://127.0.0.1:8088}
-hb() { curl -s -o /dev/null -X POST "$VC/browser/session?client=dhr-cli"; }
+hb() { curl -s -o /dev/null -X POST "$VC/browser/session?client=hour-cli"; }
 put() { hb; curl -s -o /dev/null -w "%{http_code} PUT $1\n" -X PUT "$VC$1"; }
 case "${1:-}" in
   gear)     put "/vehicle/gear?gear=$2" ;;                                   # Park|Reverse|Neutral|Drive

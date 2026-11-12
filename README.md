@@ -1,6 +1,8 @@
-# 동행록 (Donghaengrok)
+# H:our (아워)
 
-**차가 기억하는 우리의 여정.** 운행할 때마다 차가 비·별빛·바람·온기·동행·목소리를 스스로 기록해 여정 카드로 돌려주는 Pleos Connect 차량용 앱입니다.
+**우리의 여정, 그 시간을 함께.** 운행할 때마다 차가 비·별빛·바람·온기·동행·목소리를 스스로 기록해 여정 카드로 돌려주는 Pleos Connect 차량용 앱입니다.
+
+이름은 Hyundai의 **H**와 우리의 **our**를 이은 말입니다. 붙여 읽으면 시간을 뜻하는 **hour**가 됩니다. 현대자동차가 우리의 여정과 그 시간을 늘 함께한다는 뜻입니다. 읽을 때는 "아워"라고 읽습니다.
 
 > 현대자동차그룹 차량용 앱 개발 공모전 출품작 · 개발 진행 중
 
@@ -46,7 +48,7 @@ scripts/ 에뮬레이터 Virtual Console 제어(vc.sh), 주행 시나리오(scen
 
 # 설치 (에뮬레이터의 활성 사용자는 10번)
 adb install --user 10 -r app/build/outputs/apk/pleos/debug/app-pleos-debug.apk
-adb shell am start --user 10 -n com.donghaengrok.app/.MainActivity
+adb shell am start --user 10 -n com.hour.app/.MainActivity
 ```
 
 앱의 "권한 요청" 버튼으로 위치·마이크·알림·차속 권한을 허용한 뒤 "기록 서비스 시작"을 누르면 차량 신호가 실시간 로그에 표시됩니다.
@@ -67,9 +69,9 @@ scripts/vc.sh window rl 60
 에뮬레이터에는 Gleo 음성 앱이 없어 같은 인텐트를 adb로 보냅니다.
 
 ```bash
-adb shell "am broadcast --user 10 -a SAVE_JOURNEY_MOMENT -p com.donghaengrok.app --es ACTION_PARAM '{\"note\":\"애들이 무지개 봤어\"}'"
+adb shell "am broadcast --user 10 -a SAVE_JOURNEY_MOMENT -p com.hour.app --es ACTION_PARAM '{\"note\":\"애들이 무지개 봤어\"}'"
 ```
 
 ## APK
 
-제출 시점에 `apk/팀명_동행록_release.apk` 또는 GitHub Release로 올립니다.
+제출 시점에 `apk/팀명_Hour_release.apk` 또는 GitHub Release로 올립니다.
