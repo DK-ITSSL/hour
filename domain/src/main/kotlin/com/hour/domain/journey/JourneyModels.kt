@@ -94,6 +94,8 @@ data class PlacesSummary(
     val provinces: List<String> = emptyList(),
     val districts: List<String> = emptyList(),
     val maxKmFromHome: Double? = null,
+    /** 집을 모를 때의 대체 기준(출발 지점에서 가장 멀리 간 직선거리). */
+    val maxKmFromStart: Double? = null,
     val touchedOffice: Boolean = false,
     val officeReason: String? = null,
     val tunnels: Int = 0,

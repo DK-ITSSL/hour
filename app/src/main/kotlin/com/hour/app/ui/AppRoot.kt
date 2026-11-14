@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -25,6 +26,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -39,6 +41,7 @@ sealed interface Route {
     data object Home : Route
     data class Detail(val id: String) : Route
     data object Wardrobe : Route
+    data object Settings : Route
     data object Diagnostics : Route
 }
 
@@ -87,6 +90,8 @@ fun AppRoot(container: AppContainer, screen: ScreenState) {
         if (open != null) screen.consumeOpen()
     }
 
+    val compact = LocalConfiguration.current.screenWidthDp < COMPACT_DP
+    CompositionLocalProvider(LocalCompact provides compact) {
     HourTheme {
         // 주행 중에는 최소 화면만(애니메이션·목록·입력 없음).
         if (ux.requiresDistractionOptimization) {
@@ -105,9 +110,11 @@ fun AppRoot(container: AppContainer, screen: ScreenState) {
                         screen = screen,
                         onOpen = { id -> stack.add(Route.Detail(id)) },
                         onWardrobe = { stack.clear(); stack.add(Route.Wardrobe) },
+                        onSettings = { stack.clear(); stack.add(Route.Settings) },
                     )
                     is Route.Detail -> JourneyDetailScreen(container, r.id, onBack = { stack.removeAt(stack.lastIndex) })
                     Route.Wardrobe -> WardrobeScreen(container)
+                    Route.Settings -> SettingsScreen(container)
                     Route.Diagnostics -> ProbeScreen(container, onRequestPermissions = screen.requestPermissions)
                 }
             }
@@ -122,6 +129,7 @@ fun AppRoot(container: AppContainer, screen: ScreenState) {
             )
         }
     }
+    }
 }
 
 @Composable
@@ -129,10 +137,11 @@ private fun NavRail(current: Route, onSelect: (Route) -> Unit) {
     val items = buildList {
         add("홈" to Route.Home)
         add("옷장" to Route.Wardrobe)
+        add("설정" to Route.Settings)
         if (BuildConfig.DEBUG) add("진단" to Route.Diagnostics)
     }
     Column(
-        Modifier.width(150.dp).fillMaxHeight().background(HourColors.Card).padding(vertical = 28.dp, horizontal = 14.dp),
+        Modifier.width(if (LocalCompact.current) 112.dp else 150.dp).fillMaxHeight().background(HourColors.Card).padding(vertical = 28.dp, horizontal = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(14.dp),
     ) {

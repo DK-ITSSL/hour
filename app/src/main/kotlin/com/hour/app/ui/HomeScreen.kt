@@ -1,6 +1,10 @@
 package com.hour.app.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -32,6 +36,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.hour.app.data.JourneyRepository
 import com.hour.app.di.AppContainer
 import com.hour.app.recorder.JourneyRecorderService
 import com.hour.app.text.Korean
@@ -45,44 +50,44 @@ import com.hour.domain.unlock.UnlockRule
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-fun HomeScreen(container: AppContainer, screen: ScreenState, onOpen: (String) -> Unit, onWardrobe: () -> Unit) {
+fun HomeScreen(container: AppContainer, screen: ScreenState, onOpen: (String) -> Unit, onWardrobe: () -> Unit, onSettings: () -> Unit) {
     val journeys by container.journeys.journeys.collectAsState(initial = emptyList())
     val unlocks by container.journeys.unlocks.collectAsState(initial = emptyList())
     val equippedIds by container.prefs.equipped.collectAsState()
     val running by container.recorderRunning.collectAsState()
     val permissionsMissing by screen.permissionsMissing.collectAsState()
+    val anchors by container.journeys.anchorRecords.collectAsState(initial = null)
     var filter by remember { mutableStateOf<TripCategory?>(null) }
 
     val unlockedIds = unlocks.map { it.ruleId }.toSet()
     val equipped = equipped(container.journeys.rules, equippedIds.values.toSet(), unlockedIds)
     val newCount = unlocks.count { !it.seen }
 
-    Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        // 왼쪽: 캐릭터와 방, 누적 감각
-        Column(Modifier.weight(0.9f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
-            HourCard(Modifier.fillMaxWidth().weight(1f), padding = 0) {
-                Box(Modifier.fillMaxSize()) {
-                    CharacterStage(equipped, Modifier.fillMaxSize())
-                    Column(Modifier.padding(24.dp)) {
-                        Text("아워", fontSize = HourType.Title, fontWeight = FontWeight.Bold, color = HourColors.Ink)
-                        Caption(greeting(journeys))
-                    }
-                    Box(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
-                        Pill(
-                            if (newCount > 0) "옷장 · 새 선물 $newCount" else "옷장 열기",
-                            if (newCount > 0) HourColors.Companion else HourColors.Accent,
-                            filled = newCount > 0,
-                            modifier = Modifier.clickable(onClick = onWardrobe),
-                        )
-                    }
+    val context = LocalContext.current
+    val compact = LocalCompact.current
+    val shown = journeys.filter { filter == null || it.category == filter }
+
+    val characterPanel: @Composable (Modifier) -> Unit = { m ->
+        HourCard(m, padding = 0) {
+            Box(Modifier.fillMaxSize()) {
+                CharacterStage(equipped, Modifier.fillMaxSize())
+                Column(Modifier.padding(24.dp)) {
+                    Text("아워", fontSize = HourType.Title, fontWeight = FontWeight.Bold, color = HourColors.Ink)
+                    Caption(greeting(journeys))
+                }
+                Box(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
+                    Pill(
+                        if (newCount > 0) "옷장 · 새 선물 $newCount" else "옷장 열기",
+                        if (newCount > 0) HourColors.Companion else HourColors.Accent,
+                        filled = newCount > 0,
+                        modifier = Modifier.clickable(onClick = onWardrobe),
+                    )
                 }
             }
-            StatsRow(journeys)
         }
-
-        // 오른쪽: 알림 카드, 운행타입 탭, 여정 목록
-        Column(Modifier.weight(1.1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            val context = LocalContext.current
+    }
+    val notices: @Composable () -> Unit = {
+        Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
             if (permissionsMissing) {
                 NoticeCard(
                     "기록을 시작하려면 권한이 필요해요",
@@ -103,19 +108,55 @@ fun HomeScreen(container: AppContainer, screen: ScreenState, onOpen: (String) ->
                     "고르기",
                     color = HourColors.Companion,
                 ) { container.arrival.ask(latest) }
+            } else if (!permissionsMissing && running && anchors?.isEmpty() == true) {
+                NoticeCard(
+                    "집·회사를 알려 주세요",
+                    "출퇴근길·여행을 알아보는 기준이에요. 내비 즐겨찾기에 없으면 설정에서 지금 위치로 정할 수 있어요.",
+                    "설정",
+                    onSettings,
+                )
             }
+        }
+    }
+    val emptyCard: @Composable () -> Unit = {
+        HourCard(Modifier.fillMaxWidth()) {
+            Text(
+                if (journeys.isEmpty()) "첫 여정을 기다리고 있어요" else "이 운행타입의 여정은 아직 없어요",
+                fontSize = HourType.Heading, fontWeight = FontWeight.Bold,
+            )
+            Spacer(Modifier.height(8.dp))
+            Caption(if (journeys.isEmpty()) "출발하면 비·별빛·바람·동행·목소리를 차가 스스로 기록해요." else "다른 탭을 눌러 보세요.")
+        }
+    }
+
+    if (compact) {
+        // 좁은 화면: 한 줄로 쌓고 전체를 스크롤한다.
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            item { characterPanel(Modifier.fillMaxWidth().height(340.dp)) }
+            item { StatsRow(journeys) }
+            item { notices() }
+            item { CategoryTabs(journeys, filter) { filter = it } }
+            if (shown.isEmpty()) item { emptyCard() }
+            items(shown, key = { it.id }) { j -> JourneyCard(j) { onOpen(j.id) } }
+        }
+        return
+    }
+
+    Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+        // 왼쪽: 캐릭터와 방, 누적 감각
+        Column(Modifier.weight(0.9f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            characterPanel(Modifier.fillMaxWidth().weight(1f))
+            StatsRow(journeys)
+        }
+        // 오른쪽: 알림 카드, 운행타입 탭, 여정 목록
+        Column(Modifier.weight(1.1f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            notices()
             CategoryTabs(journeys, filter) { filter = it }
-            val shown = journeys.filter { filter == null || it.category == filter }
-            if (shown.isEmpty()) {
-                HourCard(Modifier.fillMaxWidth()) {
-                    Text(
-                        if (journeys.isEmpty()) "첫 여정을 기다리고 있어요" else "이 운행타입의 여정은 아직 없어요",
-                        fontSize = HourType.Heading, fontWeight = FontWeight.Bold,
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Caption(if (journeys.isEmpty()) "출발하면 비·별빛·바람·동행·목소리를 차가 스스로 기록해요." else "다른 탭을 눌러 보세요.")
-                }
-            }
+            if (shown.isEmpty()) emptyCard()
             LazyColumn(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 items(shown, key = { it.id }) { j -> JourneyCard(j) { onOpen(j.id) } }
             }
@@ -145,8 +186,9 @@ private fun StatsRow(journeys: List<JourneySummary>) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         stats.forEach { (label, value) ->
             HourCard(Modifier.weight(1f), padding = 16) {
-                Text(value, fontSize = HourType.Heading, fontWeight = FontWeight.Bold, color = HourColors.Ink, maxLines = 1, softWrap = false)
-                Caption(label)
+                val compact = LocalCompact.current
+                Text(value, fontSize = if (compact) HourType.Body else HourType.Heading, fontWeight = FontWeight.Bold, color = HourColors.Ink, maxLines = 1, softWrap = false)
+                Caption(label, size = if (compact) HourType.Tiny else HourType.Small)
             }
         }
     }
@@ -173,15 +215,18 @@ private fun NoticeCard(title: String, body: String, action: String, color: Color
 
 @Composable
 private fun CategoryTabs(journeys: List<JourneySummary>, selected: TripCategory?, onSelect: (TripCategory?) -> Unit) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+    val compact = LocalCompact.current
+    Row(
+        Modifier.fillMaxWidth().then(if (compact) Modifier.horizontalScroll(rememberScrollState()) else Modifier),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         val tabs = listOf<TripCategory?>(null) + TripCategory.entries
         tabs.forEach { c ->
             val on = c == selected
             val color = c?.color ?: HourColors.Ink
             val count = if (c == null) journeys.size else journeys.count { it.category == c }
             Box(
-                Modifier
-                    .weight(1f)
+                (if (compact) Modifier.widthIn(min = 120.dp).padding(horizontal = 0.dp) else Modifier.weight(1f))
                     .height(64.dp)
                     .clip(RoundedCornerShape(18.dp))
                     .background(if (on) color else HourColors.Card)
@@ -215,7 +260,10 @@ fun JourneyCard(j: JourneySummary, onClick: () -> Unit) {
             }
         }
         Box(Modifier.padding(18.dp).align(Alignment.CenterVertically)) {
-            if (j.category != null) Pill(j.category!!.korean, color) else Pill("확인 전", HourColors.Faint)
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (j.category != null) Pill(j.category!!.korean, color) else Pill("확인 전", HourColors.Faint)
+                if (j.id.startsWith(JourneyRepository.SAMPLE_PREFIX)) Pill("샘플", HourColors.Faint, size = HourType.Tiny)
+            }
         }
     }
 }

@@ -68,6 +68,11 @@ interface JourneyDao {
 
     @Upsert suspend fun upsertAnchor(e: AnchorEntity)
     @Query("SELECT * FROM anchor") suspend fun anchors(): List<AnchorEntity>
+    @Query("SELECT * FROM anchor") fun observeAnchors(): Flow<List<AnchorEntity>>
+    @Query("SELECT * FROM anchor WHERE type = :type") suspend fun anchor(type: String): AnchorEntity?
+    @Query("DELETE FROM anchor WHERE type = :type") suspend fun deleteAnchor(type: String)
+    @Query("DELETE FROM journey WHERE id LIKE 'sample-%'") suspend fun deleteSampleJourneys()
+    @Query("DELETE FROM unlock WHERE journeyId LIKE 'sample-%'") suspend fun deleteSampleUnlocks()
 
     @Upsert suspend fun saveCheckpoint(e: CheckpointEntity)
     @Query("SELECT * FROM checkpoint WHERE id = 0") suspend fun checkpoint(): CheckpointEntity?

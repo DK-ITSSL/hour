@@ -12,6 +12,8 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.hour.app.HourApp
 import com.hour.app.R
+import com.hour.app.data.JourneyRepository
+import com.hour.app.di.Position
 import com.hour.domain.engine.EngineOutput
 import com.hour.domain.engine.JourneyEngine
 import com.hour.domain.journey.Anchor
@@ -50,9 +52,27 @@ class JourneyRecorderService : LifecycleService() {
         lifecycleScope.launch(loop) {
             restore()
             launch {
+                // 설정에서 바꾼 집·회사를 엔진에 반영한다(엔진은 이 단일 스레드에서만 만진다).
+                container.anchorChanges.collect { (type, anchor) ->
+                    if (anchor != null) engine.setAnchor(anchor) else engine.clearAnchor(type)
+                }
+            }
+            launch {
                 container.log.add("service: subscribing signals (${container.car.flavor})")
                 container.car.signals.signals().collect { e ->
-                    if (e is SignalEvent.NaviAnchor) container.journeys.saveAnchor(Anchor(e.type, e.name, GeoPoint(e.lat, e.lon)), "NAVI_BOOKMARK")
+                    when (e) {
+                        is SignalEvent.Location ->
+                            container.lastPosition.value = Position(e.lat, e.lon, gps = true, address = container.lastPosition.value?.address)
+                        is SignalEvent.NaviAddress ->
+                            container.lastPosition.value = container.lastPosition.value?.takeIf { it.gps }?.copy(address = e.address)
+                                ?: Position(e.lat, e.lon, gps = false, address = e.address)
+                        is SignalEvent.NaviAnchor -> {
+                            // 앱에서 직접 지정한 집·회사는 내비 즐겨찾기로 덮어쓰지 않는다.
+                            if (container.journeys.anchorSource(e.type) == JourneyRepository.SOURCE_MANUAL) return@collect
+                            container.journeys.saveAnchor(Anchor(e.type, e.name, GeoPoint(e.lat, e.lon)), JourneyRepository.SOURCE_NAVI)
+                        }
+                        else -> Unit
+                    }
                     if (e is SignalEvent.Moment) container.log.add("moment: ${e.text} (${e.source})")
                     handle(engine.onEvent(e))
                     publish(e.at, force = false)
@@ -69,9 +89,12 @@ class JourneyRecorderService : LifecycleService() {
     }
 
     private suspend fun restore() {
-        container.journeys.anchors().forEach(engine::setAnchor)
+        val anchors = container.journeys.anchors()
+        anchors.forEach(engine::setAnchor)
         val cp = container.journeys.loadCheckpoint() ?: return
         val out = engine.restore(cp, System.currentTimeMillis())
+        // 체크포인트의 집·회사는 오래됐을 수 있으니 저장소 값을 다시 덮는다.
+        anchors.forEach(engine::setAnchor)
         container.log.add("service: restored checkpoint (state=${engine.state}, journey=${engine.activeJourneyId})")
         handle(out)
     }

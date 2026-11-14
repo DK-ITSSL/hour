@@ -21,6 +21,9 @@ interface CarSignalSource {
 
     /** 시연·디버그용으로 신호를 직접 넣는다. pleos 빌드에서는 Moment 같은 앱 내부 이벤트만 의미가 있다. */
     fun inject(event: SignalEvent)
+
+    /** 내비 경로 안내를 요청한다("다시 가기"·도착 이벤트 확인용). 지원하지 않으면 false. */
+    fun requestRoute(name: String, address: String, lat: Double, lon: Double): Boolean = false
 }
 
 data class ProbeItem(val name: String, val status: ProbeStatus, val detail: String = "")

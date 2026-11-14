@@ -10,6 +10,8 @@ import ai.pleos.playground.navi.data.BookmarkInfo
 import ai.pleos.playground.navi.data.CautionPoint
 import ai.pleos.playground.navi.data.CurrentLocationInfo
 import ai.pleos.playground.navi.data.DestinationArrivedInfo
+import ai.pleos.playground.navi.data.RouteInfo
+import ai.pleos.playground.navi.data.RouteStartInfo
 import ai.pleos.playground.navi.data.TBTInfo
 import ai.pleos.playground.navi.helper.NaviHelper
 import ai.pleos.playground.navi.helper.listener.NaviHelperEventListener
@@ -339,6 +341,16 @@ class PleosCarSignalSource(private val context: Context) : CarSignalSource {
         }
     }
 
+    @Volatile private var activeNavi: NaviHelper? = null
+
+    override fun requestRoute(name: String, address: String, lat: Double, lon: Double): Boolean {
+        val navi = activeNavi ?: return false
+        return runCatching {
+            navi.requestRoute(RouteInfo(latitude = lat, longitude = lon, poiName = name, poiId = "", address = address, poiSubId = ""))
+            Log.i(TAG, "requestRoute $name ($lat, $lon)")
+        }.onFailure { Log.w(TAG, "requestRoute failed: $it") }.isSuccess
+    }
+
     // ---------------------------------------------------------------- navi
 
     private fun navi(): Flow<SignalEvent> = callbackFlow {
@@ -383,15 +395,25 @@ class PleosCarSignalSource(private val context: Context) : CarSignalSource {
             override fun onError(errorCode: NaviErrorCode) {
                 trySend(unavailable("navi", "error=$errorCode"))
             }
+            override fun onRouteStarted(routeStartInfo: RouteStartInfo) {
+                Log.i(TAG, "route started: $routeStartInfo")
+                trySend(SignalEvent.NaviStatus(now(), "ROUTE_STARTED"))
+            }
+            override fun onRoutingCompleted() {
+                Log.i(TAG, "routing completed")
+                trySend(SignalEvent.NaviStatus(now(), "ROUTING_COMPLETED"))
+            }
         }
         navi.initialize({
             Log.i(TAG, "NaviHelper connected")
             navi.addListener(listener)
+            activeNavi = navi
             navi.getBookmarkInfo()
             navi.getCurrentLocationInfo()
             navi.getDestinationInfo()
         }, { t -> trySend(unavailable("navi.init", t)) })
         awaitClose {
+            activeNavi = null
             runCatching { navi.removeListener(listener) }
             runCatching { navi.release() }
         }

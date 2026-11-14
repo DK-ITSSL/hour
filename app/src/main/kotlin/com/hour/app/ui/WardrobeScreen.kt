@@ -68,27 +68,27 @@ fun WardrobeScreen(container: AppContainer) {
         onDispose { container.scope.launch { container.journeys.markUnlocksSeen() } }
     }
 
-    Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-        Column(Modifier.weight(0.8f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            HourCard(Modifier.fillMaxWidth().weight(1f), padding = 0) {
-                Box(Modifier.fillMaxSize()) {
-                    CharacterStage(equipped, Modifier.fillMaxSize())
-                    Column(Modifier.padding(24.dp)) {
-                        Text("아워", fontSize = HourType.Title, fontWeight = FontWeight.Bold, color = HourColors.Ink)
-                        Caption(if (equipped.isEmpty()) "아직 아무것도 입지 않았어요" else equipped.joinToString(" · ") { it.name })
+    val compact = LocalCompact.current
+    val stage: @Composable (Modifier) -> Unit = { m ->
+        HourCard(m, padding = 0) {
+            Box(Modifier.fillMaxSize()) {
+                CharacterStage(equipped, Modifier.fillMaxSize())
+                Column(Modifier.padding(24.dp)) {
+                    Text("아워", fontSize = HourType.Title, fontWeight = FontWeight.Bold, color = HourColors.Ink)
+                    Caption(if (equipped.isEmpty()) "아직 아무것도 입지 않았어요" else equipped.joinToString(" · ") { it.name })
+                }
+                if (equipped.isNotEmpty()) {
+                    Box(Modifier.align(Alignment.TopEnd).padding(20.dp)) {
+                        Pill("모두 벗기", HourColors.Sub, modifier = Modifier.clickable { container.prefs.clearEquipped() })
                     }
                 }
             }
-            if (equipped.isNotEmpty()) {
-                BigButton("모두 벗기", onClick = { container.prefs.clearEquipped() }, color = HourColors.Sub, filled = false, modifier = Modifier.fillMaxWidth())
-            }
         }
-        Column(Modifier.weight(1.2f).fillMaxHeight(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            Row(verticalAlignment = Alignment.Bottom) {
-                Text("옷장", fontSize = HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink)
-                Spacer(Modifier.size(16.dp))
-                Caption("받은 선물 ${byId.keys.count { id -> rules.any { it.id == id } }} / ${rules.size} · 운행타입마다 다른 선물이 열려요", size = HourType.Body)
-            }
+    }
+    val shelf: @Composable (Modifier) -> Unit = { m ->
+        Column(m, verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Text("옷장", fontSize = HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink)
+            Caption("받은 선물 ${byId.keys.count { id -> rules.any { it.id == id } }} / ${rules.size} · 운행타입마다 다른 선물이 열려요", size = HourType.Body)
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 slots.forEach { s ->
                     val on = s == slot
@@ -99,7 +99,7 @@ fun WardrobeScreen(container: AppContainer) {
                             .clip(RoundedCornerShape(18.dp))
                             .background(if (on) HourColors.Accent else HourColors.Card)
                             .clickable { slot = s }
-                            .padding(horizontal = 30.dp),
+                            .padding(horizontal = if (compact) 20.dp else 30.dp),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
@@ -114,7 +114,7 @@ fun WardrobeScreen(container: AppContainer) {
             val items = rules.filter { it.slot == slot }
                 .sortedWith(compareBy<UnlockRule>({ byId[it.id] == null }, { it.category?.ordinal ?: 9 }))
             LazyVerticalGrid(
-                columns = GridCells.Adaptive(230.dp),
+                columns = GridCells.Adaptive(if (compact) 190.dp else 230.dp),
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
@@ -131,6 +131,18 @@ fun WardrobeScreen(container: AppContainer) {
                     )
                 }
             }
+        }
+    }
+
+    if (compact) {
+        Column(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            stage(Modifier.fillMaxWidth().height(300.dp))
+            shelf(Modifier.fillMaxWidth().weight(1f))
+        }
+    } else {
+        Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+            stage(Modifier.weight(0.8f).fillMaxHeight())
+            shelf(Modifier.weight(1.2f).fillMaxHeight())
         }
     }
 }

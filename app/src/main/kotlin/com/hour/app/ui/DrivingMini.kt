@@ -5,6 +5,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -32,6 +34,7 @@ import com.hour.app.ui.theme.HourType
  * 주행 중 미니 화면(distractionOptimized). 상태 한 줄, 감각 표시등, 큰 버튼 하나만 둔다.
  * 애니메이션·목록·키보드 입력 없음.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun DrivingMini(container: AppContainer) {
     val running by container.recorderRunning.collectAsState()
@@ -53,7 +56,7 @@ fun DrivingMini(container: AppContainer) {
             },
             color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold,
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Lamp("비", HourColors.Rain, j?.rain?.present == true)
             Lamp("별빛", HourColors.Star, j?.light?.starlight == true)
             Lamp("바람", HourColors.Wind, j?.wind?.present == true)

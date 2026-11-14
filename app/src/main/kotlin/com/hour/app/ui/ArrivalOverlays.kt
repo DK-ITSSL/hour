@@ -6,6 +6,8 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -70,6 +72,7 @@ private fun Scrim(content: @Composable () -> Unit) {
  * 도착 후 운행타입 확인. 추천이 먼저 선택돼 있고, 처음 묻는 경우 10초 동안 손대지 않으면 추천대로 기록한다.
  * 이미 정한 타입을 바꾸는 경우(여정 상세의 '바꾸기')에는 자동 적용하지 않는다.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CategorySheet(container: AppContainer, p: JourneySummary) {
     val scope = rememberCoroutineScope()
@@ -79,6 +82,7 @@ fun CategorySheet(container: AppContainer, p: JourneySummary) {
     var touched by remember(p.id) { mutableStateOf(changing) }
     var remain by remember(p.id) { mutableIntStateOf(AUTO_SECONDS) }
     var busy by remember(p.id) { mutableStateOf(false) }
+    val compact = LocalCompact.current
 
     fun confirm(category: TripCategory, source: CategorySource) {
         if (busy) return
@@ -97,34 +101,37 @@ fun CategorySheet(container: AppContainer, p: JourneySummary) {
 
     Scrim {
         Column(
-            Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.92f).clip(RoundedCornerShape(32.dp)).background(HourColors.Card).padding(40.dp),
+            Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.92f).clip(RoundedCornerShape(32.dp)).background(HourColors.Card).padding(if (compact) 24.dp else 40.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
             Caption(if (changing) "운행타입 바꾸기" else "도착했어요 · ${Korean.km(p.distanceKm)} · ${Korean.minutes(p.drivingMinutes)}")
             Text(
                 if (changing) "이 여정은 어떤 길이었나요?" else "이번 운행은 어떤 길이었나요?",
-                fontSize = HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink,
+                fontSize = if (compact) HourType.Title else HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink,
             )
             p.suggestion?.let { Caption("${it.reason} · 운행타입마다 받는 선물이 달라요", size = HourType.Body) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                TripCategory.entries.forEach { c ->
-                    CategoryChip(
-                        category = c,
-                        selected = c == selected,
-                        recommended = c == suggested,
-                        onClick = { selected = c; touched = true },
-                        modifier = Modifier.weight(1f),
-                    )
+            // 넓은 화면은 한 줄 4개, 좁은 화면은 2×2
+            TripCategory.entries.chunked(if (compact) 2 else 4).forEach { rowItems ->
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    rowItems.forEach { c ->
+                        CategoryChip(
+                            category = c,
+                            selected = c == selected,
+                            recommended = c == suggested,
+                            onClick = { selected = c; touched = true },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
                 }
             }
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Caption(
                     when {
                         changing -> "바꿔도 이미 받은 선물은 그대로 남아요."
                         !touched && suggested != null -> "${remain}초 뒤 추천대로 기록할게요."
                         else -> "Gleo에게 \"여행으로 기록해줘\"라고 말해도 돼요."
                     },
-                    modifier = Modifier.weight(1f),
+                    modifier = if (compact) Modifier.fillMaxWidth() else Modifier.weight(1f).align(Alignment.CenterVertically),
                 )
                 BigButton("나중에", onClick = { container.arrival.later() }, color = HourColors.Sub, filled = false)
                 BigButton(
@@ -147,6 +154,7 @@ fun GiftReveal(container: AppContainer, gift: Gift, onWardrobe: () -> Unit, onDe
     var flipped by remember(gift) { mutableStateOf(false) }
     var shown by remember(gift) { mutableIntStateOf(0) }
     val rotation by animateFloatAsState(if (flipped) 0f else 180f, tween(900), label = "flip")
+    val compact = LocalCompact.current
 
     LaunchedEffect(gift) {
         delay(250)
@@ -160,15 +168,16 @@ fun GiftReveal(container: AppContainer, gift: Gift, onWardrobe: () -> Unit, onDe
 
     Scrim {
         Column(
-            Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.92f),
+            Modifier.widthIn(max = 1180.dp).fillMaxWidth(0.92f).verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(24.dp),
         ) {
             // 여정 카드(뒤집기)
             Box(
                 Modifier
-                    .width(760.dp)
-                    .height(300.dp)
+                    .widthIn(max = 760.dp)
+                    .fillMaxWidth()
+                    .height(if (compact) 260.dp else 300.dp)
                     .graphicsLayer {
                         rotationY = rotation
                         cameraDistance = 14f * density
@@ -203,16 +212,16 @@ fun GiftReveal(container: AppContainer, gift: Gift, onWardrobe: () -> Unit, onDe
                     Text("이번 여정도 아워가 기억해 둘게요.", fontSize = HourType.Heading, fontWeight = FontWeight.Bold, color = HourColors.Ink)
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(18.dp)) {
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(18.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(18.dp)) {
                     gift.unlocked.forEachIndexed { i, rule ->
                         AnimatedVisibility(visible = shown > i, enter = scaleIn(tween(380)) + fadeIn(tween(380))) {
                             Column(
-                                Modifier.width(210.dp).clip(RoundedCornerShape(28.dp)).background(HourColors.Card).padding(18.dp),
+                                Modifier.width(if (compact) 170.dp else 210.dp).clip(RoundedCornerShape(28.dp)).background(HourColors.Card).padding(18.dp),
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.spacedBy(8.dp),
                             ) {
                                 Pill("새 선물", HourColors.Companion, filled = true, size = HourType.Tiny)
-                                ItemIcon(rule, locked = false, modifier = Modifier.size(130.dp))
+                                ItemIcon(rule, locked = false, modifier = Modifier.size(if (compact) 100.dp else 130.dp))
                                 Text(rule.name, fontSize = HourType.Body, fontWeight = FontWeight.Bold, color = HourColors.Ink, textAlign = TextAlign.Center)
                                 rule.category?.let { Text("${it.korean} 전용", fontSize = HourType.Tiny, color = it.color) }
                             }
@@ -221,7 +230,7 @@ fun GiftReveal(container: AppContainer, gift: Gift, onWardrobe: () -> Unit, onDe
                 }
             }
 
-            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterHorizontally), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 BigButton("낭독 듣기", onClick = { container.car.voice.speak(j.narrative) }, color = Color.White, filled = false)
                 BigButton("여정 보기", onClick = onDetail, color = Color.White, filled = false)
                 if (gift.unlocked.isNotEmpty()) BigButton("옷장에서 입혀 보기", onClick = onWardrobe, color = HourColors.Companion)

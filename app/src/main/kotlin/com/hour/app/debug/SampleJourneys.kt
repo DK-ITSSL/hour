@@ -1,5 +1,6 @@
 package com.hour.app.debug
 
+import com.hour.app.data.JourneyRepository
 import com.hour.domain.geo.SunCalculator
 import com.hour.domain.journey.CategorySource
 import com.hour.domain.journey.CategorySuggestion
@@ -25,7 +26,8 @@ import java.util.UUID
 import kotlin.math.sin
 
 /**
- * 시연용 샘플 데이터(디버그 빌드 전용). 영상에는 "시연용 샘플 데이터"라고 표기한다.
+ * 체험·시연용 샘플 데이터. id가 "sample-"로 시작해 실제 기록과 구분되고, 화면에는 "샘플" 표시가 붙는다.
+ * 설정 화면(모든 빌드)과 진단 화면·adb 인텐트(디버그)에서 넣는다.
  * - pastWeek: 지난 며칠의 출퇴근·일상·데이트 여정 5건(여행은 실시간 시연용으로 남겨 둔다)
  * - arrivalPreview: 강릉 가족 여행 도착 직전 상태(운행타입 확인 → 도착 선물 흐름 확인용)
  */
@@ -117,7 +119,7 @@ object SampleJourneys {
         val endMs = startMs + minutes * 60_000L
         val path = path(from.point!!, to.point!!)
         val draft = JourneySummary(
-            id = UUID.randomUUID().toString(),
+            id = JourneyRepository.SAMPLE_PREFIX + UUID.randomUUID().toString(),
             startedAt = startMs,
             endedAt = endMs,
             final = final,

@@ -17,6 +17,11 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
+/** 집·회사 위치와 출처(NAVI_BOOKMARK: 내비 즐겨찾기, MANUAL: 앱에서 직접 지정). */
+data class AnchorRecord(val anchor: Anchor, val source: String) {
+    val manual: Boolean get() = source == JourneyRepository.SOURCE_MANUAL
+}
+
 data class UnlockView(val rule: UnlockRule?, val ruleId: String, val unlockedAt: Long, val journeyId: String, val seen: Boolean)
 
 /** 여정·해금·집/회사·체크포인트 저장소. 쓰기는 Mutex로 직렬화한다. */
@@ -112,6 +117,22 @@ class JourneyRepository(private val dao: JourneyDao, private val log: (String) -
         runCatching { Anchor(AnchorType.valueOf(e.type), e.name, GeoPoint(e.lat, e.lon)) }.getOrNull()
     }
 
+    val anchorRecords: Flow<List<AnchorRecord>> = dao.observeAnchors().map { list ->
+        list.mapNotNull { e ->
+            runCatching { AnchorRecord(Anchor(AnchorType.valueOf(e.type), e.name, GeoPoint(e.lat, e.lon)), e.source) }.getOrNull()
+        }
+    }
+
+    suspend fun anchorSource(type: AnchorType): String? = dao.anchor(type.name)?.source
+
+    suspend fun deleteAnchor(type: AnchorType) = dao.deleteAnchor(type.name)
+
+    /** 체험용 샘플 여정과 그 여정으로 열린 선물만 지운다(실제 기록은 그대로). */
+    suspend fun clearSamples() = mutex.withLock {
+        dao.deleteSampleUnlocks()
+        dao.deleteSampleJourneys()
+    }
+
     suspend fun saveCheckpoint(cp: EngineCheckpoint) =
         dao.saveCheckpoint(CheckpointEntity(json = json.encodeToString(EngineCheckpoint.serializer(), cp), savedAt = cp.savedAt))
 
@@ -121,6 +142,12 @@ class JourneyRepository(private val dao: JourneyDao, private val log: (String) -
     }
 
     suspend fun clearCheckpoint() = dao.clearCheckpoint()
+
+    companion object {
+        const val SOURCE_MANUAL = "MANUAL"
+        const val SOURCE_NAVI = "NAVI_BOOKMARK"
+        const val SAMPLE_PREFIX = "sample-"
+    }
 
     private fun entityOf(s: JourneySummary) = JourneyEntity(
         id = s.id, startedAt = s.startedAt, endedAt = s.endedAt, final = s.final,

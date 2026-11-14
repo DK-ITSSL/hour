@@ -93,6 +93,42 @@ class JourneyEngineTest {
     }
 
     @Test
+    fun `집 위치를 모르면 출발 지점에서 100km 이상 벗어난 여정을 여행으로 추천한다`() {
+        val s = Scenario("2026-11-14T10:00")
+        s.loc(home.first, home.second); s.gear(DriveGear.PARK)
+        s.at(1.0); s.gear(DriveGear.DRIVE)
+        s.drive(1.0, 150.0, home, gangneung, 90f)
+        s.at(151.0); s.speed(0f); s.gear(DriveGear.PARK)
+        val out = s.run(JourneyEngine { "t-2" }, tickUntilMin = 185.0)
+        val done = out.filterIsInstance<EngineOutput.Finished>().single().summary
+        assertEquals(null, done.places.maxKmFromHome)
+        assertTrue((done.places.maxKmFromStart ?: 0.0) > 150, "${done.places.maxKmFromStart}")
+        assertEquals(TripCategory.TRIP, done.suggestion?.category)
+        assertTrue(done.suggestion!!.reason.startsWith("출발한 곳에서"), done.suggestion!!.reason)
+    }
+
+    @Test
+    fun `좌표계가 다른 내비 위치와 GPS를 섞어 거리를 부풀리지 않는다`() {
+        // 에뮬레이터: 내비·즐겨찾기는 한국, GPS 기본값은 미국 캘리포니아
+        val california = 37.4220 to -122.0841
+        val s = Scenario("2026-11-14T10:00")
+        s.anchor(AnchorType.HOME, home.first, home.second)
+        s.address("경기 성남시 수정구 시흥동", home.first, home.second)
+        s.gear(DriveGear.PARK)
+        s.at(1.0); s.gear(DriveGear.DRIVE)
+        s.address("경기 성남시 수정구 시흥동", home.first, home.second)
+        s.drive(2.0, 12.0, california, 37.4400 to -122.0600, 40f)
+        s.at(12.5); s.address("경기 성남시 수정구 신흥동", 37.4400, 127.1400)
+        s.at(13.0); s.speed(0f); s.gear(DriveGear.PARK)
+        val out = s.run(JourneyEngine { "m-1" }, tickUntilMin = 50.0)
+        val done = out.filterIsInstance<EngineOutput.Finished>().single().summary
+        assertEquals(null, done.places.maxKmFromHome)
+        assertTrue((done.places.maxKmFromStart ?: 0.0) < 10, "${done.places.maxKmFromStart}")
+        assertEquals(TripCategory.DAILY, done.suggestion?.category)
+        assertTrue(done.path.all { it.lon < 0 }, "경로는 GPS 좌표만")
+    }
+
+    @Test
     fun `주차장 이동처럼 300m 전에 P로 돌아오면 버린다`() {
         val s = Scenario()
         s.loc(home.first, home.second); s.gear(DriveGear.PARK)

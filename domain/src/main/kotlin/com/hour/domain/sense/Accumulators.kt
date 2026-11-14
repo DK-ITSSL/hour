@@ -57,6 +57,8 @@ class IntervalTracker(
 @Serializable
 class VehicleState(
     var gear: DriveGear = DriveGear.UNKNOWN,
+    /** vehicle.lat/lon이 GPS(FusedLocation)에서 왔는지. false면 내비 현재 위치다. */
+    var gpsFix: Boolean = false,
     var speedKmh: Float = 0f,
     var wiperOn: Boolean = false,
     var wiperLevel: WiperLevel = WiperLevel.OFF,
@@ -209,6 +211,12 @@ class PlaceAccumulator(
     val provinces: MutableSet<String> = mutableSetOf(),
     val districts: MutableSet<String> = mutableSetOf(),
     var maxKmFromHome: Double? = null,
+    /** 집을 모를 때 쓰는 대체 기준: 이번 여정 출발 지점에서 가장 멀리 간 직선거리. */
+    var maxKmFromStart: Double? = null,
+    var originLat: Double? = null,
+    var originLon: Double? = null,
+    /** 이번 여정에 GPS(FusedLocation) 위치가 들어왔는지. 들어오면 거리 판정은 GPS만 쓴다. */
+    var gpsSeen: Boolean = false,
     var maxAltitude: Double? = null,
     val passCounts: MutableMap<PassPointKind, Int> = mutableMapOf(),
     val passArmed: MutableMap<PassPointKind, Boolean> = mutableMapOf(),
@@ -223,10 +231,26 @@ class PlaceAccumulator(
         r.district?.let { districts += it }
     }
 
-    fun onLocation(lat: Double, lon: Double, altitude: Double, home: GeoPoint?) {
+    /**
+     * 위치 한 점. fromGps=false는 내비 현재 위치(NaviAddress)다.
+     * 실차에서는 두 위치가 같지만 에뮬레이터에서는 좌표계가 다를 수 있다(GPS 기본값은 미국).
+     * 그래서 GPS가 한 번이라도 들어오면 거리·경로 판정은 GPS만 쓰고, 비현실적인 거리(800km 초과)는 버린다.
+     */
+    fun onLocation(lat: Double, lon: Double, altitude: Double, home: GeoPoint?, fromGps: Boolean = true) {
+        if (fromGps && !gpsSeen) {
+            gpsSeen = true
+            originLat = null; originLon = null
+            maxKmFromStart = null; maxKmFromHome = null
+            lastLocateLat = null; lastLocateLon = null
+            path.clear()
+        }
+        if (!fromGps && gpsSeen) return
+        if (originLat == null) { originLat = lat; originLon = lon }
+        val fromStart = haversineMeters(originLat!!, originLon!!, lat, lon) / 1000.0
+        if (fromStart <= MAX_PLAUSIBLE_KM) maxKmFromStart = max(maxKmFromStart ?: 0.0, fromStart)
         home?.let {
             val d = haversineMeters(it.lat, it.lon, lat, lon) / 1000.0
-            maxKmFromHome = max(maxKmFromHome ?: 0.0, d)
+            if (d <= MAX_PLAUSIBLE_KM) maxKmFromHome = max(maxKmFromHome ?: 0.0, d)
         }
         if (altitude != 0.0) maxAltitude = max(maxAltitude ?: altitude, altitude)
         val pLat = lastLocateLat
@@ -252,6 +276,7 @@ class PlaceAccumulator(
 
     private companion object {
         const val PATH_STEP_M = 300.0
+        const val MAX_PLAUSIBLE_KM = 800.0
         const val MAX_PATH = 400
         const val PASS_M = 30.0
         const val REARM_M = 200.0

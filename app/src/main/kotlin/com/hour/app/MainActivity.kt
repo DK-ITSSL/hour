@@ -79,6 +79,15 @@ class MainActivity : ComponentActivity() {
             }
             ACTION_OPEN_ARRIVAL -> intent.getStringExtra(ArrivalNotifier.EXTRA_JOURNEY_ID)?.let { openRequest.value = OpenRequest.Arrival(it) }
             ACTION_OPEN_GIFT -> openRequest.value = OpenRequest.Gift
+            DEBUG_ROUTE -> if (BuildConfig.DEBUG) {
+                val ok = container.car.signals.requestRoute(
+                    intent.getStringExtra("name") ?: "성남시청",
+                    intent.getStringExtra("address") ?: "경기 성남시 중원구 성남대로 997",
+                    intent.getStringExtra("lat")?.toDoubleOrNull() ?: 37.4201,
+                    intent.getStringExtra("lon")?.toDoubleOrNull() ?: 127.1265,
+                )
+                container.log.add("debug: requestRoute -> $ok")
+            }
             DEBUG_SEED, DEBUG_PREVIEW_ARRIVAL, DEBUG_RESET -> if (BuildConfig.DEBUG) {
                 lifecycleScope.launch {
                     when (intent.action) {
@@ -116,5 +125,6 @@ class MainActivity : ComponentActivity() {
         const val DEBUG_SEED = "com.hour.app.debug.SEED"
         const val DEBUG_PREVIEW_ARRIVAL = "com.hour.app.debug.PREVIEW_ARRIVAL"
         const val DEBUG_RESET = "com.hour.app.debug.RESET"
+        const val DEBUG_ROUTE = "com.hour.app.debug.ROUTE"
     }
 }

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.hour.app.ui.theme.HourColors
 import com.hour.app.ui.theme.color
 import com.hour.domain.unlock.AssetSlot
@@ -295,9 +296,11 @@ private fun DrawScope.drawRoom(items: List<UnlockRule>) {
     drawRect(Color(0xFFE7DAC4), topLeft = Offset(0f, h * 0.78f), size = Size(w, h * 0.22f))
     drawLine(Color(0xFFD9C8AB), Offset(0f, h * 0.78f), Offset(w, h * 0.78f), strokeWidth = 3f)
     // 창문
+    // 왼쪽 위 이름·소개 글자(약 100dp)와 겹치지 않게 그 아래부터 그린다.
+    val textArea = 104.dp.toPx()
     val wx = w * 0.07f
-    val wy = h * 0.10f
-    val ww = minOf(w * 0.2f, h * 0.32f)
+    val wy = maxOf(h * 0.10f, textArea)
+    val ww = minOf(w * 0.2f, (h * 0.78f - wy) * 0.6f, h * 0.32f)
     val wh = ww * 1.15f
     drawRoundRect(Color(0xFFCFE6F5), topLeft = Offset(wx, wy), size = Size(ww, wh), cornerRadius = CornerRadius(12f))
     drawRoundRect(Color(0xFFC9B89C), topLeft = Offset(wx, wy), size = Size(ww, wh), cornerRadius = CornerRadius(12f), style = Stroke(8f))
@@ -306,7 +309,7 @@ private fun DrawScope.drawRoom(items: List<UnlockRule>) {
     if (items.isNotEmpty()) {
         // 오른쪽 벽 선반에 진열한다.
         val side = minOf(h * 0.14f, w * 0.17f)
-        val shelfY = h * 0.30f
+        val shelfY = maxOf(h * 0.30f, textArea + side)
         val shelfX = w * 0.95f - (side * 1.1f) * items.size - side * 0.2f
         drawRoundRect(Color(0xFFC9B89C), topLeft = Offset(shelfX, shelfY), size = Size(w * 0.95f - shelfX, 10f), cornerRadius = CornerRadius(4f))
         items.forEachIndexed { i, rule ->

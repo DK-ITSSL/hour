@@ -91,6 +91,7 @@ class JourneyEngine(private val newId: () -> String = { UUID.randomUUID().toStri
     val state: JourneyStateMachine.State get() = machine.state
 
     fun setAnchor(anchor: Anchor) { anchors[anchor.type] = anchor }
+    fun clearAnchor(type: AnchorType) { anchors.remove(type) }
     fun anchors(): List<Anchor> = anchors.values.toList()
 
     fun onEvent(e: SignalEvent): List<EngineOutput> {
@@ -122,7 +123,7 @@ class JourneyEngine(private val newId: () -> String = { UUID.randomUUID().toStri
             is SignalEvent.Defroster -> vehicle.defrost = e.on
             is SignalEvent.OutsideTemperature -> vehicle.outsideC = e.celsius
             is SignalEvent.Location -> {
-                vehicle.lat = e.lat; vehicle.lon = e.lon; vehicle.altitude = e.altitude
+                vehicle.lat = e.lat; vehicle.lon = e.lon; vehicle.altitude = e.altitude; vehicle.gpsFix = true
                 if (d != null) {
                     d.distance.onLocation(e.lat, e.lon, e.at)
                     d.places.onLocation(e.lat, e.lon, e.altitude, anchors[AnchorType.HOME]?.point)
@@ -135,7 +136,7 @@ class JourneyEngine(private val newId: () -> String = { UUID.randomUUID().toStri
                 if (vehicle.lat == null) { vehicle.lat = e.lat; vehicle.lon = e.lon }
                 if (d != null) {
                     d.places.onAddress(e.address)
-                    d.places.onLocation(e.lat, e.lon, 0.0, anchors[AnchorType.HOME]?.point)
+                    d.places.onLocation(e.lat, e.lon, 0.0, anchors[AnchorType.HOME]?.point, fromGps = false)
                     if (d.startPlace.address == null) d.startPlace = d.startPlace.copy(address = e.address, point = d.startPlace.point ?: GeoPoint(e.lat, e.lon))
                     d.endPlace = PlaceInfo(GeoPoint(e.lat, e.lon), e.address)
                 }
@@ -216,12 +217,12 @@ class JourneyEngine(private val newId: () -> String = { UUID.randomUUID().toStri
             is Transition.Start -> {
                 val d = JourneyDraft(newId(), t.at)
                 lastOdometer?.let { d.distance.onOdometer(it) }
-                vehicle.lat?.let { lat -> d.distance.onLocation(lat, vehicle.lon!!, t.at) }
+                if (vehicle.gpsFix) vehicle.lat?.let { lat -> d.distance.onLocation(lat, vehicle.lon!!, t.at) }
                 d.startPlace = placeOf(vehicle.point, vehicle.address)
                 d.endPlace = d.startPlace
                 d.driveSegStart = t.at
                 d.safety.onDriveStart(t.at)
-                vehicle.point?.let { d.places.onLocation(it.lat, it.lon, vehicle.altitude ?: 0.0, anchors[AnchorType.HOME]?.point) }
+                vehicle.point?.let { d.places.onLocation(it.lat, it.lon, vehicle.altitude ?: 0.0, anchors[AnchorType.HOME]?.point, fromGps = vehicle.gpsFix) }
                 vehicle.address?.let { d.places.onAddress(it) }
                 draft = d
                 sync(t.at)
@@ -310,6 +311,7 @@ class JourneyEngine(private val newId: () -> String = { UUID.randomUUID().toStri
                 provinces = pl.provinces.sorted(),
                 districts = pl.districts.sorted(),
                 maxKmFromHome = pl.maxKmFromHome,
+                maxKmFromStart = pl.maxKmFromStart,
                 touchedOffice = officeReason != null,
                 officeReason = officeReason,
                 tunnels = pl.count(PassPointKind.TUNNEL),

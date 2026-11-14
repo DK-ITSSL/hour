@@ -2,6 +2,8 @@ package com.hour.app.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.hour.app.di.AppContainer
+import com.hour.app.data.JourneyRepository
 import com.hour.app.text.Korean
 import com.hour.app.ui.theme.HourColors
 import com.hour.app.ui.theme.HourType
@@ -33,6 +36,7 @@ import com.hour.app.ui.theme.color
 import com.hour.domain.journey.JourneySummary
 import com.hour.domain.signal.MomentSource
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun JourneyDetailScreen(container: AppContainer, journeyId: String, onBack: () -> Unit) {
     val journeys by container.journeys.journeys.collectAsState(initial = null)
@@ -45,46 +49,67 @@ fun JourneyDetailScreen(container: AppContainer, journeyId: String, onBack: () -
     }
     val color = j.category?.color ?: HourColors.Accent
 
+    val compact = LocalCompact.current
+    val back: @Composable () -> Unit = {
+        Text("‹ 홈", fontSize = HourType.Heading, color = HourColors.Accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 8.dp))
+    }
+    val header: @Composable () -> Unit = {
+        HourCard(Modifier.fillMaxWidth()) {
+            Caption("${Korean.date(j.startedAt)} ${Korean.clock(j.startedAt)} – ${Korean.clock(j.endedAt)}")
+            Spacer(Modifier.height(6.dp))
+            Text(j.title, fontSize = if (compact) HourType.Title else HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink, lineHeight = HourType.Display * 1.2)
+            Spacer(Modifier.height(14.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (j.category != null) Pill(j.category!!.korean, color, filled = true, size = HourType.Body) else Pill("운행타입 확인 전", HourColors.Faint, size = HourType.Body)
+                Pill("${Korean.km(j.distanceKm)} · ${Korean.minutes(j.drivingMinutes)}", HourColors.Ink, size = HourType.Body)
+                if (j.id.startsWith(JourneyRepository.SAMPLE_PREFIX)) Pill("샘플", HourColors.Faint, size = HourType.Body)
+                Text(
+                    if (j.category != null) "바꾸기" else "고르기",
+                    fontSize = HourType.Body, color = HourColors.Accent, fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.clickable { container.arrival.change(j) }.padding(8.dp),
+                )
+            }
+            Spacer(Modifier.height(18.dp))
+            Text(j.narrative, fontSize = HourType.Body, color = HourColors.Ink, lineHeight = HourType.Body * 1.55)
+            Spacer(Modifier.height(18.dp))
+            BigButton("낭독 듣기", onClick = { container.car.voice.speak(j.narrative) }, color = color, filled = false)
+        }
+    }
+    val pathCard: @Composable () -> Unit = {
+        HourCard(Modifier.fillMaxWidth(), padding = 0) {
+            if (j.path.size >= 2) {
+                PathSketch(j.path, color, Modifier.fillMaxWidth().height(if (compact) 240.dp else 320.dp))
+            } else {
+                Box(Modifier.fillMaxWidth().height(140.dp), contentAlignment = Alignment.Center) { Caption("경로를 그릴 위치 기록이 없어요") }
+            }
+        }
+    }
+
+    if (compact) {
+        Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            back(); header(); pathCard(); SenseCard(j); PlacesCard(j)
+            if (j.moments.isNotEmpty()) MomentsCard(j)
+            SafetyCard(j)
+        }
+        return
+    }
+
     Row(Modifier.fillMaxSize().padding(28.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
         Column(
             Modifier.weight(1.1f).fillMaxHeight().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            Text("‹ 홈", fontSize = HourType.Heading, color = HourColors.Accent, fontWeight = FontWeight.Bold, modifier = Modifier.clickable(onClick = onBack).padding(vertical = 8.dp))
-            HourCard(Modifier.fillMaxWidth()) {
-                Caption("${Korean.date(j.startedAt)} ${Korean.clock(j.startedAt)} – ${Korean.clock(j.endedAt)}")
-                Spacer(Modifier.height(6.dp))
-                Text(j.title, fontSize = HourType.Display, fontWeight = FontWeight.Bold, color = HourColors.Ink, lineHeight = HourType.Display * 1.2)
-                Spacer(Modifier.height(14.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (j.category != null) Pill(j.category!!.korean, color, filled = true, size = HourType.Body) else Pill("운행타입 확인 전", HourColors.Faint, size = HourType.Body)
-                    Pill("${Korean.km(j.distanceKm)} · ${Korean.minutes(j.drivingMinutes)}", HourColors.Ink, size = HourType.Body)
-                    Text(
-                        if (j.category != null) "바꾸기" else "고르기",
-                        fontSize = HourType.Body, color = HourColors.Accent, fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.clickable { container.arrival.change(j) }.padding(8.dp),
-                    )
-                }
-                Spacer(Modifier.height(18.dp))
-                Text(j.narrative, fontSize = HourType.Body, color = HourColors.Ink, lineHeight = HourType.Body * 1.55)
-                Spacer(Modifier.height(18.dp))
-                BigButton("낭독 듣기", onClick = { container.car.voice.speak(j.narrative) }, color = color, filled = false)
-            }
-            SenseCard(j)
+            back(); header(); SenseCard(j)
         }
         Column(
             Modifier.weight(0.9f).fillMaxHeight().verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             Spacer(Modifier.height(44.dp))
-            HourCard(Modifier.fillMaxWidth(), padding = 0) {
-                if (j.path.size >= 2) {
-                    PathSketch(j.path, color, Modifier.fillMaxWidth().height(320.dp))
-                } else {
-                    Box(Modifier.fillMaxWidth().height(160.dp), contentAlignment = Alignment.Center) { Caption("경로를 그릴 위치 기록이 없어요") }
-                }
-            }
-            PlacesCard(j)
+            pathCard(); PlacesCard(j)
             if (j.moments.isNotEmpty()) MomentsCard(j)
             SafetyCard(j)
         }
@@ -115,7 +140,7 @@ private fun SenseCard(j: JourneySummary) {
                 Box(Modifier.weight(1f).height(16.dp).clip(RoundedCornerShape(8.dp)).background(c.copy(alpha = 0.12f))) {
                     Box(Modifier.fillMaxHeight().fillMaxWidth(ratio.coerceIn(0.04f, 1f)).clip(RoundedCornerShape(8.dp)).background(c))
                 }
-                Text(value, fontSize = HourType.Small, color = HourColors.Sub, modifier = Modifier.padding(start = 16.dp).width(300.dp))
+                Text(value, fontSize = HourType.Small, color = HourColors.Sub, modifier = Modifier.padding(start = 16.dp).width(if (LocalCompact.current) 180.dp else 300.dp))
             }
         }
     }
