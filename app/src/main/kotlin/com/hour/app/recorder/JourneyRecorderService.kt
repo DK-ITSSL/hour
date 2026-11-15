@@ -22,9 +22,12 @@ import com.hour.domain.signal.SignalEvent
 import kotlin.math.roundToInt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * 여정 기록 포그라운드 서비스(specialUse).
@@ -58,24 +61,11 @@ class JourneyRecorderService : LifecycleService() {
                 }
             }
             launch {
-                container.log.add("service: subscribing signals (${container.car.flavor})")
-                container.car.signals.signals().collect { e ->
-                    when (e) {
-                        is SignalEvent.Location ->
-                            container.lastPosition.value = Position(e.lat, e.lon, gps = true, address = container.lastPosition.value?.address)
-                        is SignalEvent.NaviAddress ->
-                            container.lastPosition.value = container.lastPosition.value?.takeIf { it.gps }?.copy(address = e.address)
-                                ?: Position(e.lat, e.lon, gps = false, address = e.address)
-                        is SignalEvent.NaviAnchor -> {
-                            // 앱에서 직접 지정한 집·회사는 내비 즐겨찾기로 덮어쓰지 않는다.
-                            if (container.journeys.anchorSource(e.type) == JourneyRepository.SOURCE_MANUAL) return@collect
-                            container.journeys.saveAnchor(Anchor(e.type, e.name, GeoPoint(e.lat, e.lon)), JourneyRepository.SOURCE_NAVI)
-                        }
-                        else -> Unit
-                    }
-                    if (e is SignalEvent.Moment) container.log.add("moment: ${e.text} (${e.source})")
-                    handle(engine.onEvent(e))
-                    publish(e.at, force = false)
+                // 위치·차속은 권한 없이 등록하면 실패한 채로 남는다. 허용된 권한이 바뀌면 구독을 끊고 처음부터 다시 한다.
+                container.permissions.granted.collectLatest { granted ->
+                    container.log.add("service: subscribing signals (${container.car.flavor}, 허용된 권한 ${granted.size}개)")
+                    // 처리 중이던 신호는 끝까지 처리한 뒤에 끊는다(엔진과 저장소가 어긋나지 않게).
+                    container.car.signals.signals().collect { e -> withContext(NonCancellable) { onSignal(e) } }
                 }
             }
             while (isActive) {
@@ -84,8 +74,29 @@ class JourneyRecorderService : LifecycleService() {
                 handle(engine.onTick(now))
                 publish(now, force = true)
                 checkpoint(now, force = false)
+                // 화면 밖(설정 앱 등)에서 허용한 권한도 알아챈다.
+                container.permissions.refresh()
             }
         }
+    }
+
+    private suspend fun onSignal(e: SignalEvent) {
+        when (e) {
+            is SignalEvent.Location ->
+                container.lastPosition.value = Position(e.lat, e.lon, gps = true, address = container.lastPosition.value?.address)
+            is SignalEvent.NaviAddress ->
+                container.lastPosition.value = container.lastPosition.value?.takeIf { it.gps }?.copy(address = e.address)
+                    ?: Position(e.lat, e.lon, gps = false, address = e.address)
+            is SignalEvent.NaviAnchor -> {
+                // 앱에서 직접 지정한 집·회사는 내비 즐겨찾기로 덮어쓰지 않는다.
+                if (container.journeys.anchorSource(e.type) == JourneyRepository.SOURCE_MANUAL) return
+                container.journeys.saveAnchor(Anchor(e.type, e.name, GeoPoint(e.lat, e.lon)), JourneyRepository.SOURCE_NAVI)
+            }
+            else -> Unit
+        }
+        if (e is SignalEvent.Moment) container.log.add("moment: ${e.text} (${e.source})")
+        handle(engine.onEvent(e))
+        publish(e.at, force = false)
     }
 
     private suspend fun restore() {

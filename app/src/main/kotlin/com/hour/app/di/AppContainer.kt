@@ -37,6 +37,7 @@ class AppContainer(context: Context) {
     val db: AppDatabase = AppDatabase.create(appContext)
     val journeys = JourneyRepository(db.journeys()) { log.add(it) }
     val prefs = Prefs(appContext)
+    val permissions = RuntimePermissions(appContext)
     val notifier = ArrivalNotifier(appContext)
     val arrival = ArrivalFlow(scope, journeys, notifier, car.voice, prefs, log)
 

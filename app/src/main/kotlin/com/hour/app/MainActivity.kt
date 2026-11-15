@@ -1,13 +1,10 @@
 package com.hour.app
 
 import android.content.Intent
-import android.content.pm.PackageManager
-import android.content.pm.PermissionInfo
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.hour.app.arrival.ArrivalNotifier
 import com.hour.app.debug.DemoActions
@@ -100,21 +97,13 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    /** 사용자가 허용해야 하는 권한(위험 권한) 중 아직 허용되지 않은 것. 일반·시스템 권한은 제외한다. */
-    private fun missingRuntimePermissions(): List<String> {
-        val declared = packageManager.getPackageInfo(packageName, PackageManager.GET_PERMISSIONS).requestedPermissions.orEmpty()
-        return declared.filter { p ->
-            val dangerous = runCatching { packageManager.getPermissionInfo(p, 0).protection == PermissionInfo.PROTECTION_DANGEROUS }.getOrDefault(false)
-            dangerous && ContextCompat.checkSelfPermission(this, p) != PackageManager.PERMISSION_GRANTED
-        }
-    }
-
+    /** 권한 상태를 다시 읽는다. 새로 허용된 권한이 있으면 기록 서비스가 차량 신호를 다시 구독한다. */
     private fun refreshPermissions() {
-        permissionsMissing.value = missingRuntimePermissions().isNotEmpty()
+        permissionsMissing.value = container.permissions.refresh().isNotEmpty()
     }
 
     private fun requestMissingPermissions() {
-        val missing = missingRuntimePermissions()
+        val missing = container.permissions.missing()
         container.log.add("permission request: ${missing.map { it.substringAfterLast('.') }}")
         if (missing.isNotEmpty()) permissionLauncher.launch(missing.toTypedArray())
     }
